@@ -1,0 +1,236 @@
+// schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Workspace {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner   User?   @relation("OwnedWorkspaces", fields: [ownerId], references: [id])
+  ownerId String?
+
+  users User[] @relation("UserWorkspaces")
+
+  products   Product[]
+  orders     Order[]
+  categories Category[]
+  stores     Store[] // one-to-many
+  User       User?      @relation(fields: [userId], references: [id])
+  userId     String?
+}
+
+model User {
+  id              String    @id @default(uuid())
+  firstName       String    @db.VarChar(100)
+  lastName        String?   @db.VarChar(100)
+  email           String    @unique
+  password        String
+  role            Role      @default(CUSTOMER)
+  termsConditions Boolean   @default(false)
+  phone           String?   @db.VarChar(15)
+  phoneVerified   Boolean   @default(false)
+  emailVerified   Boolean   @default(false)
+  isActive        Boolean   @default(true)
+  isBanned        Boolean   @default(false)
+  isDeleted       Boolean   @default(false)
+  isStaff         Boolean   @default(false)
+  isAdmin         Boolean   @default(false)
+  isManager       Boolean   @default(false)
+  isSuperAdmin    Boolean   @default(false)
+  isOwner         Boolean   @default(false)
+  profileImageUrl String?
+  lastLogin       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Owns workspaces
+  ownedWorkspaces Workspace[] @relation("OwnedWorkspaces")
+
+  // Member of workspaces
+  workspaces Workspace[] @relation("UserWorkspaces")
+
+  addresses Address[]
+  cart      CartItem[]
+  orders    Order[]
+  bills     Bill[]
+  Workspace Workspace[]
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  CUSTOMER
+  STAFF
+}
+
+model Address {
+  id         String   @id @default(uuid())
+  user       User     @relation(fields: [userId], references: [id])
+  userId     String
+  label      String?
+  street     String
+  city       String
+  region     String
+  postalCode String
+  country    String
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  shippingOrders Order[] @relation("ShippingAddress")
+  billingOrders  Order[] @relation("BillingAddress")
+}
+
+model Category {
+  id          String     @id @default(uuid())
+  name        String
+  slug        String     @unique
+  description String?
+  products    Product[]
+  parentId    String?
+  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryHierarchy")
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  Workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+  workspaceId Int?
+}
+
+model Product {
+  id          String           @id @default(uuid())
+  name        String
+  slug        String           @unique
+  description String
+  images      String[] // URLs
+  category    Category         @relation(fields: [categoryId], references: [id])
+  categoryId  String
+  workspace   Workspace?       @relation(fields: [workspaceId], references: [id])
+  workspaceId Int?
+  variants    ProductVariant[]
+  isActive    Boolean          @default(true) // soft-disable
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model ProductVariant {
+  id          String  @id @default(uuid())
+  title       String
+  sku         String  @unique
+  price       Float
+  stock       Int
+  weight      Float?
+  dimensions  String?
+  color       String?
+  size        String?
+  isAvailable Boolean @default(true)
+  product     Product @relation(fields: [productId], references: [id])
+  productId   String
+
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+  billItems  BillItem[]
+}
+
+model CartItem {
+  id        String         @id @default(uuid())
+  user      User           @relation(fields: [userId], references: [id])
+  userId    String
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
+  variantId String
+  quantity  Int
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+model Order {
+  id                String        @id @default(uuid())
+  user              User          @relation(fields: [userId], references: [id])
+  userId            String
+  items             OrderItem[]
+  paymentMethod     PaymentMethod
+  shippingAddress   Address       @relation("ShippingAddress", fields: [shippingAddressId], references: [id])
+  shippingAddressId String
+  billingAddress    Address       @relation("BillingAddress", fields: [billingAddressId], references: [id])
+  billingAddressId  String
+  totalAmount       Float
+  status            OrderStatus   @default(PENDING)
+  notes             String?
+  placedAt          DateTime      @default(now())
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  Workspace         Workspace?    @relation(fields: [workspaceId], references: [id])
+  workspaceId       Int?
+}
+
+model OrderItem {
+  id        String         @id @default(uuid())
+  order     Order          @relation(fields: [orderId], references: [id])
+  orderId   String
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
+  variantId String
+  quantity  Int
+  price     Float
+}
+
+enum PaymentMethod {
+  MPESA
+  EMOLA
+  CASH
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  DELIVERED
+  CANCELLED
+}
+
+model Bill {
+  id              String        @id @default(uuid())
+  user            User?         @relation(fields: [userId], references: [id])
+  userId          String?
+  items           BillItem[]
+  totalAmount     Float
+  paymentMethod   PaymentMethod
+  createdManually Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model BillItem {
+  id        String         @id @default(uuid())
+  bill      Bill           @relation(fields: [billId], references: [id])
+  billId    String
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
+  variantId String
+  quantity  Int
+  price     Float
+}
+
+model Store {
+  id                String     @id @default(uuid())
+  name              String
+  description       String?
+  contactEmail      String
+  contactPhone      String
+  operationalHours  String
+  address           String
+  logoUrl           String?
+  workspace         Workspace? @relation(fields: [workspaceId], references: [id])
+  workspaceId       Int?
+  instagramHandle   String?
+  facebookPage      String?
+  deliveryAvailable Boolean    @default(true)
+}
