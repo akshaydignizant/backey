@@ -3,10 +3,9 @@ import prisma from '../util/prisma';
 import redisClient from '../cache/redisClient';
 import { generateToken } from '../util/generateToken';
 import sendEmail from '../util/sendEmail';
-import { Role } from '@prisma/client';
 
 export const authService = {
-  signupService: async (firstName: string, lastName: string, email: string, password: string, role: Role, phone: string) => {
+  signupService: async (firstName: string, lastName: string, email: string, password: string, phone: string) => {
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) throw new Error('User already exists');
 
@@ -18,7 +17,6 @@ export const authService = {
         lastName,
         email,
         password: hashedPassword,
-        // role: Role.ADMIN,
         // phone,
       },
     });

@@ -1,8 +1,9 @@
-// schema.prisma
-
+// ----------------------------
+// Generator & Datasource
+// ----------------------------
 generator client {
   provider = "prisma-client-js"
-  output   = "./node_modules/@prisma/client"
+  output   = "./generated/prisma-client-js"
 }
 
 datasource db {
@@ -10,178 +11,26 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Workspace {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique
-  slug        String   @unique
-  description String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  owner   User?   @relation("OwnedWorkspaces", fields: [ownerId], references: [id])
-  ownerId String?
-
-  users User[] @relation("UserWorkspaces")
-
-  products   Product[]
-  orders     Order[]
-  categories Category[]
-  stores     Store[] // one-to-many
-  User       User?      @relation(fields: [userId], references: [id])
-  userId     String?
-}
-
+// ----------------------------
+// Enums
+// ----------------------------
 enum Role {
   ADMIN
   MANAGER
   STAFF
 }
 
-model User {
-  id              String    @id @default(uuid())
-  firstName       String    @db.VarChar(100)
-  lastName        String?   @db.VarChar(100)
-  email           String    @unique
-  password        String
-  role            Role?     @default(ADMIN)
-  termsConditions Boolean   @default(false)
-  phone           String?   @db.VarChar(15)
-  phoneVerified   Boolean   @default(false)
-  emailVerified   Boolean   @default(false)
-  isActive        Boolean   @default(true)
-  isBanned        Boolean   @default(false)
-  isDeleted       Boolean   @default(false)
-  isStaff         Boolean   @default(false)
-  isAdmin         Boolean   @default(false)
-  isManager       Boolean   @default(false)
-  isSuperAdmin    Boolean   @default(false)
-  isOwner         Boolean   @default(false)
-  profileImageUrl String?
-  lastLogin       DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  // Owns workspaces
-  ownedWorkspaces Workspace[] @relation("OwnedWorkspaces")
-
-  // Member of workspaces
-  workspaces Workspace[] @relation("UserWorkspaces")
-
-  addresses Address[]
-  cart      CartItem[]
-  orders    Order[]
-  bills     Bill[]
-  Workspace Workspace[]
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
 }
 
-model Address {
-  id         String   @id @default(uuid())
-  user       User     @relation(fields: [userId], references: [id])
-  userId     String
-  label      String?
-  street     String
-  city       String
-  region     String
-  postalCode String
-  country    String
-  isDefault  Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  shippingOrders Order[] @relation("ShippingAddress")
-  billingOrders  Order[] @relation("BillingAddress")
-}
-
-model Category {
-  id          String     @id @default(uuid())
-  name        String
-  slug        String     @unique
-  description String?
-  products    Product[]
-  parentId    String?
-  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  children    Category[] @relation("CategoryHierarchy")
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  Workspace   Workspace? @relation(fields: [workspaceId], references: [id])
-  workspaceId Int?
-}
-
-model Product {
-  id          String           @id @default(uuid())
-  name        String
-  slug        String           @unique
-  description String
-  images      String[] // URLs
-  category    Category         @relation(fields: [categoryId], references: [id])
-  categoryId  String
-  workspace   Workspace?       @relation(fields: [workspaceId], references: [id])
-  workspaceId Int?
-  variants    ProductVariant[]
-  isActive    Boolean          @default(true) // soft-disable
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-}
-
-model ProductVariant {
-  id          String  @id @default(uuid())
-  title       String
-  sku         String  @unique
-  price       Float
-  stock       Int
-  weight      Float?
-  dimensions  String?
-  color       String?
-  size        String?
-  isAvailable Boolean @default(true)
-  product     Product @relation(fields: [productId], references: [id])
-  productId   String
-
-  cartItems  CartItem[]
-  orderItems OrderItem[]
-  billItems  BillItem[]
-}
-
-model CartItem {
-  id        String         @id @default(uuid())
-  user      User           @relation(fields: [userId], references: [id])
-  userId    String
-  variant   ProductVariant @relation(fields: [variantId], references: [id])
-  variantId String
-  quantity  Int
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
-}
-
-model Order {
-  id                String        @id @default(uuid())
-  user              User          @relation(fields: [userId], references: [id])
-  userId            String
-  items             OrderItem[]
-  paymentMethod     PaymentMethod
-  shippingAddress   Address       @relation("ShippingAddress", fields: [shippingAddressId], references: [id])
-  shippingAddressId String
-  billingAddress    Address       @relation("BillingAddress", fields: [billingAddressId], references: [id])
-  billingAddressId  String
-  totalAmount       Float
-  status            OrderStatus   @default(PENDING)
-  notes             String?
-  placedAt          DateTime      @default(now())
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-  Workspace         Workspace?    @relation(fields: [workspaceId], references: [id])
-  workspaceId       Int?
-}
-
-model OrderItem {
-  id        String         @id @default(uuid())
-  order     Order          @relation(fields: [orderId], references: [id])
-  orderId   String
-  variant   ProductVariant @relation(fields: [variantId], references: [id])
-  variantId String
-  quantity  Int
-  price     Float
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
 }
 
 enum PaymentMethod {
@@ -197,30 +46,270 @@ enum OrderStatus {
   CANCELLED
 }
 
-model Bill {
-  id              String        @id @default(uuid())
-  user            User?         @relation(fields: [userId], references: [id])
-  userId          String?
-  items           BillItem[]
-  totalAmount     Float
-  paymentMethod   PaymentMethod
-  createdManually Boolean       @default(false)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+// ----------------------------
+// Models
+// ----------------------------
+
+model User {
+  id              String     @id @default(uuid())
+  firstName       String
+  lastName        String?
+  email           String     @unique
+  password        String
+  phone           String?    @unique
+  role            Role?      @default(STAFF)
+  status          UserStatus @default(ACTIVE)
+  phoneVerified   Boolean    @default(false)
+  emailVerified   Boolean    @default(false)
+  isActive        Boolean    @default(true)
+  isBanned        Boolean    @default(false)
+  isDeleted       Boolean    @default(false)
+  isStaff         Boolean    @default(false)
+  isAdmin         Boolean    @default(false)
+  isManager       Boolean    @default(false)
+  isSuperAdmin    Boolean    @default(false)
+  isOwner         Boolean    @default(false)
+  profileImageUrl String?
+  lastLogin       DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  // Relations
+  ownedWorkspaces     Workspace[]  @relation("OwnedWorkspaces")
+  workspaces          Workspace[]  @relation("UserWorkspaces")
+  boardMemberships    BoardUser[]
+  addresses           Address[]
+  cart                CartItem[]
+  orders              Order[]
+  bills               Bill[]
+  invitationsSent     Invitation[] @relation("InvitedBy")
+  invitationsReceived Invitation[] @relation("InvitedUser")
 }
 
-model BillItem {
-  id        String         @id @default(uuid())
-  bill      Bill           @relation(fields: [billId], references: [id])
-  billId    String
-  variant   ProductVariant @relation(fields: [variantId], references: [id])
+model Workspace {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner   User?   @relation("OwnedWorkspaces", fields: [ownerId], references: [id])
+  ownerId String?
+
+  users           User[]           @relation("UserWorkspaces")
+  boards          Board[]
+  products        Product[]
+  orders          Order[]
+  categories      Category[]
+  stores          Store[]
+  rolePermissions RolePermission[]
+  Invitation      Invitation[]
+}
+
+model Board {
+  id          Int      @id @default(autoincrement())
+  name        String
+  address     String
+  workspaceId Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  users       BoardUser[]
+  products    Product[]
+  invitations Invitation[]
+
+  @@index([workspaceId])
+}
+
+model BoardUser {
+  userId    String
+  boardId   Int
+  role      Role
+  joinedAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  @@id([userId, boardId])
+}
+
+model RolePermission {
+  id          Int    @id @default(autoincrement())
+  workspaceId Int
+  role        Role
+  permission  String
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, role, permission])
+}
+
+// ----------------------------
+// Business Models
+// ----------------------------
+
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  description String
+  images      String[]
+  isActive    Boolean  @default(true)
+  categoryId  String
+  workspaceId Int?
+  boardId     Int?
+
+  category  Category   @relation(fields: [categoryId], references: [id])
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
+  board     Board?     @relation(fields: [boardId], references: [id])
+
+  variants  ProductVariant[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+}
+
+model ProductVariant {
+  id          String  @id @default(uuid())
+  title       String
+  sku         String  @unique
+  price       Float
+  stock       Int
+  weight      Float?
+  dimensions  String?
+  color       String?
+  size        String?
+  isAvailable Boolean @default(true)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+  billItems  BillItem[]
+}
+
+model Category {
+  id          String  @id @default(uuid())
+  name        String
+  slug        String  @unique
+  description String?
+  parentId    String?
+  workspaceId Int?
+
+  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryHierarchy")
+
+  Workspace Workspace? @relation(fields: [workspaceId], references: [id])
+  products  Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ----------------------------
+// Commerce
+// ----------------------------
+
+model Order {
+  id                String @id @default(uuid())
+  userId            String
+  shippingAddressId String
+  billingAddressId  String
+  workspaceId       Int?
+
+  user            User       @relation(fields: [userId], references: [id])
+  shippingAddress Address    @relation("ShippingAddress", fields: [shippingAddressId], references: [id])
+  billingAddress  Address    @relation("BillingAddress", fields: [billingAddressId], references: [id])
+  workspace       Workspace? @relation(fields: [workspaceId], references: [id])
+
+  paymentMethod PaymentMethod
+  totalAmount   Float
+  status        OrderStatus   @default(PENDING)
+  notes         String?
+  placedAt      DateTime      @default(now())
+
+  items     OrderItem[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+}
+
+model OrderItem {
+  id        String @id @default(uuid())
+  orderId   String
   variantId String
   quantity  Int
   price     Float
+
+  order   Order          @relation(fields: [orderId], references: [id])
+  variant ProductVariant @relation(fields: [variantId], references: [id])
+}
+
+model Bill {
+  id              String        @id @default(uuid())
+  userId          String?
+  totalAmount     Float
+  paymentMethod   PaymentMethod
+  createdManually Boolean       @default(false)
+
+  user      User?      @relation(fields: [userId], references: [id])
+  items     BillItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model BillItem {
+  id        String @id @default(uuid())
+  billId    String
+  variantId String
+  quantity  Int
+  price     Float
+
+  bill    Bill           @relation(fields: [billId], references: [id])
+  variant ProductVariant @relation(fields: [variantId], references: [id])
+}
+
+model CartItem {
+  id        String @id @default(uuid())
+  userId    String
+  variantId String
+  quantity  Int
+
+  user    User           @relation(fields: [userId], references: [id])
+  variant ProductVariant @relation(fields: [variantId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ----------------------------
+// Extras
+// ----------------------------
+
+model Address {
+  id         String  @id @default(uuid())
+  userId     String
+  label      String?
+  street     String
+  city       String
+  region     String
+  postalCode String
+  country    String
+  isDefault  Boolean @default(false)
+
+  user           User    @relation(fields: [userId], references: [id])
+  shippingOrders Order[] @relation("ShippingAddress")
+  billingOrders  Order[] @relation("BillingAddress")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Store {
-  id                String     @id @default(uuid())
+  id                String  @id @default(uuid())
   name              String
   description       String?
   contactEmail      String
@@ -228,9 +317,31 @@ model Store {
   operationalHours  String
   address           String
   logoUrl           String?
-  workspace         Workspace? @relation(fields: [workspaceId], references: [id])
-  workspaceId       Int?
   instagramHandle   String?
   facebookPage      String?
-  deliveryAvailable Boolean    @default(true)
+  deliveryAvailable Boolean @default(true)
+
+  workspaceId Int?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+}
+
+model Invitation {
+  id            Int              @id @default(autoincrement())
+  email         String           @unique
+  tempPassword  String
+  inviteToken   String           @unique
+  status        InvitationStatus @default(PENDING)
+  role          Role
+  workspaceId   Int
+  boardId       Int
+  invitedById   String
+  invitedUserId String?
+  createdAt     DateTime         @default(now())
+  expiresAt     DateTime
+  acceptedAt    DateTime?
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  board       Board     @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  invitedBy   User      @relation("InvitedBy", fields: [invitedById], references: [id])
+  invitedUser User?     @relation("InvitedUser", fields: [invitedUserId], references: [id])
 }
