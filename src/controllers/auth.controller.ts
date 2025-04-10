@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import httpResponse from '../util/httpResponse';
 import httpError from '../util/httpError';
-import { authService } from '../service/auth.service';
+import { authService } from '../services/auth.service';
 import jwt from 'jsonwebtoken';
 
 export const authController = {

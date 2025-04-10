@@ -57,7 +57,7 @@ model User {
   email           String     @unique
   password        String
   phone           String?    @unique
-  role            Role?      @default(STAFF)
+  role            Role?      @default(ADMIN)
   status          UserStatus @default(ACTIVE)
   phoneVerified   Boolean    @default(false)
   emailVerified   Boolean    @default(false)
@@ -65,25 +65,25 @@ model User {
   isBanned        Boolean    @default(false)
   isDeleted       Boolean    @default(false)
   isStaff         Boolean    @default(false)
-  isAdmin         Boolean    @default(false)
+  isAdmin         Boolean    @default(true)
   isManager       Boolean    @default(false)
   isSuperAdmin    Boolean    @default(false)
-  isOwner         Boolean    @default(false)
   profileImageUrl String?
   lastLogin       DateTime?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
   // Relations
-  ownedWorkspaces     Workspace[]  @relation("OwnedWorkspaces")
-  workspaces          Workspace[]  @relation("UserWorkspaces")
-  boardMemberships    BoardUser[]
-  addresses           Address[]
+  ownedWorkspaces     Workspace[]    @relation("OwnedWorkspaces")
+  workspaces          Workspace[]    @relation("UserWorkspaces")
+  boardMemberships    BoardUser[] //people who are members of boards ( store)
+  addresses           userAddress[]
   cart                CartItem[]
   orders              Order[]
   bills               Bill[]
-  invitationsSent     Invitation[] @relation("InvitedBy")
-  invitationsReceived Invitation[] @relation("InvitedUser")
+  invitationsSent     Invitation[]   @relation("InvitedBy")
+  invitationsReceived Invitation[]   @relation("InvitedUser")
+  boardAddress        boardAddress[]
 }
 
 model Workspace {
@@ -221,10 +221,10 @@ model Order {
   billingAddressId  String
   workspaceId       Int?
 
-  user            User       @relation(fields: [userId], references: [id])
-  shippingAddress Address    @relation("ShippingAddress", fields: [shippingAddressId], references: [id])
-  billingAddress  Address    @relation("BillingAddress", fields: [billingAddressId], references: [id])
-  workspace       Workspace? @relation(fields: [workspaceId], references: [id])
+  user            User         @relation(fields: [userId], references: [id])
+  shippingAddress boardAddress @relation("ShippingAddress", fields: [shippingAddressId], references: [id])
+  billingAddress  boardAddress @relation("BillingAddress", fields: [billingAddressId], references: [id])
+  workspace       Workspace?   @relation(fields: [workspaceId], references: [id])
 
   paymentMethod PaymentMethod
   totalAmount   Float
@@ -289,11 +289,28 @@ model CartItem {
 // Extras
 // ----------------------------
 
-model Address {
+model userAddress {
   id         String  @id @default(uuid())
   userId     String
-  label      String?
-  street     String
+  address    String
+  street     String?
+  city       String
+  region     String
+  postalCode String
+  country    String
+  isDefault  Boolean @default(false)
+
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model boardAddress {
+  id         String  @id @default(uuid())
+  userId     String
+  address    String
+  street     String?
   city       String
   region     String
   postalCode String
