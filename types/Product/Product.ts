@@ -1,3 +1,5 @@
+import { Category, ProductVariant } from "@prisma/client";
+
 export interface Product {
   id: string;
   name: string;

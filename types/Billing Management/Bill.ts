@@ -1,3 +1,6 @@
+import { BillItem } from "@prisma/client";
+
+
 export interface Bill {
   id: string;
   userId?: string;

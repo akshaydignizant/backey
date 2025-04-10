@@ -30,7 +30,7 @@ export const authController = {
         return httpResponse(req, res, 400, 'Role can only contain alphanumeric characters');
       }
       // Ensure role is one of the enum strings
-      if (!["ADMIN", "MANAGER", "CUSTOMER", "STAFF"].includes(role)) {
+      if (!["ADMIN", "MANAGER", "STAFF"].includes(role)) {
         return httpResponse(req, res, 400, "Invalid role");
       }
 
