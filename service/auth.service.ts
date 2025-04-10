@@ -18,7 +18,7 @@ export const authService = {
         lastName,
         email,
         password: hashedPassword,
-        role,
+        role: Role.ADMIN,
         // phone,
       },
     });
