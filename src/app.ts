@@ -65,13 +65,13 @@
 import express, { Application, NextFunction, Request, Response } from 'express'
 import path from 'path'
 // import router from '../router/apiRouter'
-import globalErrorHandler from '../middleware/globalErrorHandler'
-import responseMessage from '../constant/responseMessage'
-import httpError from '../util/httpError'
+import globalErrorHandler from './middleware/globalErrorHandler'
+import responseMessage from './constant/responseMessage'
+import httpError from './util/httpError'
 import helmet from 'helmet'
 import cors from 'cors'
 import { PrismaClient } from '@prisma/client'
-import authRoutes from '../router/auth.routes'
+import authRoutes from './router/auth.routes'
 import dotenv from 'dotenv'
 dotenv.config()
 

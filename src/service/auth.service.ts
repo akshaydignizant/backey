@@ -1,11 +1,9 @@
 import bcrypt from 'bcryptjs';
-// import prisma from '../util/prisma';
+import prisma from '../util/prisma';
 import redisClient from '../cache/redisClient';
 import { generateToken } from '../util/generateToken';
 import sendEmail from '../util/sendEmail';
-import { PrismaClient, Role } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { Role } from '@prisma/client';
 
 export const authService = {
   signupService: async (firstName: string, lastName: string, email: string, password: string, role: Role, phone: string) => {
@@ -20,7 +18,7 @@ export const authService = {
         lastName,
         email,
         password: hashedPassword,
-        role: Role.ADMIN,
+        // role: Role.ADMIN,
         // phone,
       },
     });
