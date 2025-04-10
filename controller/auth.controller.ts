@@ -8,7 +8,7 @@ export const authController = {
   signup: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { firstName, lastName, email, password, role, phone } = req.body;
-      if (!firstName || !lastName || !email || !password || !role || !phone) {
+      if (!firstName || !lastName || !email || !password) {
         return httpResponse(req, res, 400, 'All fields are required');
       }
       if (password.length < 6) {
@@ -20,12 +20,12 @@ export const authController = {
       if (!/^\d{10}$/.test(phone)) {
         return httpResponse(req, res, 400, 'Phone number must be 10 digits long');
       }
-      // if (!/^[a-zA-Z0-9]+$/.test(firstName)) {
-      //   return httpResponse(req, res, 400, 'firstName can only contain alphanumeric characters');
-      // }
-      // if (!/^[a-zA-Z0-9]+$/.test(lastName)) {
-      //   return httpResponse(req, res, 400, 'lastName can only contain alphanumeric characters');
-      // }
+      if (!/^[a-zA-Z0-9]+$/.test(firstName)) {
+        return httpResponse(req, res, 400, 'firstName can only contain alphanumeric characters');
+      }
+      if (!/^[a-zA-Z0-9]+$/.test(lastName)) {
+        return httpResponse(req, res, 400, 'lastName can only contain alphanumeric characters');
+      }
       if (!/^[a-zA-Z0-9]+$/.test(role)) {
         return httpResponse(req, res, 400, 'Role can only contain alphanumeric characters');
       }
