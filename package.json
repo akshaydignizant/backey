@@ -12,7 +12,7 @@
     "lint:fix": "eslint --fix",
     "format:check": "prettier . --check",
     "format:fix": "prettier . --fix",
-    "prepare": "husky",
+    "prepare": "husky || true",
     "migrate:dev": "cross-env MIGRATE_MODE=development node script/migration.js",
     "migrate:prod": "cross-env MIGRATE_MODE=production node script/migration.js"
   },
