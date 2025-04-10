@@ -7,7 +7,7 @@ import jwt from 'jsonwebtoken';
 export const authController = {
   signup: async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { firstName, lastName, email, password, role, phone } = req.body;
+      const { firstName, lastName, email, password, phone } = req.body;
       if (!firstName || !lastName || !email || !password) {
         return httpResponse(req, res, 400, 'All fields are required');
       }
@@ -34,7 +34,7 @@ export const authController = {
       //   return httpResponse(req, res, 400, "Invalid role");
       // }
 
-      const data = await authService.signupService(firstName, lastName, email, password, role, phone);
+      const data = await authService.signupService(firstName, lastName, email, password, phone);
       httpResponse(req, res, 201, 'User registered successfully', data);
     } catch (err) {
       httpError(next, err, req);
