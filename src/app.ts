@@ -71,7 +71,6 @@ import httpError from '../util/httpError'
 import helmet from 'helmet'
 import cors from 'cors'
 import { PrismaClient } from '@prisma/client'
-import userRoutes from '../router/user.route'
 import authRoutes from '../router/auth.routes'
 import dotenv from 'dotenv'
 dotenv.config()
@@ -91,7 +90,7 @@ app.use(
 )
 app.use(express.json())
 app.use(express.static(path.join(__dirname, '../', 'public')))
-app.use('/api/users', userRoutes)
+// app.use('/api/users', userRoutes)
 // Main API routes
 app.use('/api/v1/auth', authRoutes)
 
