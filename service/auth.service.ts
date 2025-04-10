@@ -20,7 +20,7 @@ export const authService = {
         lastName,
         email,
         password: hashedPassword,
-        role: Role.ADMIN,
+        // role: Role.ADMIN,
         // phone,
       },
     });

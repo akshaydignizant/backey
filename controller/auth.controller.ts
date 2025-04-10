@@ -17,22 +17,22 @@ export const authController = {
       if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
         return httpResponse(req, res, 400, 'Invalid email format');
       }
-      if (!/^\d{10}$/.test(phone)) {
-        return httpResponse(req, res, 400, 'Phone number must be 10 digits long');
-      }
+      // if (!/^\d{10}$/.test(phone)) {
+      //   return httpResponse(req, res, 400, 'Phone number must be 10 digits long');
+      // }
       if (!/^[a-zA-Z0-9]+$/.test(firstName)) {
         return httpResponse(req, res, 400, 'firstName can only contain alphanumeric characters');
       }
       if (!/^[a-zA-Z0-9]+$/.test(lastName)) {
         return httpResponse(req, res, 400, 'lastName can only contain alphanumeric characters');
       }
-      if (!/^[a-zA-Z0-9]+$/.test(role)) {
-        return httpResponse(req, res, 400, 'Role can only contain alphanumeric characters');
-      }
+      // if (!/^[a-zA-Z0-9]+$/.test(role)) {
+      //   return httpResponse(req, res, 400, 'Role can only contain alphanumeric characters');
+      // }
       // Ensure role is one of the enum strings
-      if (!["ADMIN", "MANAGER", "STAFF"].includes(role)) {
-        return httpResponse(req, res, 400, "Invalid role");
-      }
+      // if (!["ADMIN", "MANAGER", "STAFF"].includes(role)) {
+      //   return httpResponse(req, res, 400, "Invalid role");
+      // }
 
       const data = await authService.signupService(firstName, lastName, email, password, role, phone);
       httpResponse(req, res, 201, 'User registered successfully', data);
