@@ -1,3 +1,5 @@
+import { Address, OrderItem } from "@prisma/client";
+
 export interface Order {
   id: string;
   userId: string;

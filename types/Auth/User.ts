@@ -1,3 +1,5 @@
+import { Role } from "@prisma/client";
+
 export interface User {
   id: string;
   firstName: string;
@@ -5,7 +7,7 @@ export interface User {
   email: string;
   phone?: string;
   passwordHash: string;
-  role: 'customer' | 'staff' | 'manager';
+  role: Role;
   createdAt: Date;
   updatedAt: Date;
 }

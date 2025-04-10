@@ -6,12 +6,12 @@ import sendEmail from '../util/sendEmail';
 import { Role } from '@prisma/client';
 
 export const authService = {
-  signupService: async (firstName: string,lastName: string, email: string, password: string, role: Role, phone: string) => {
+  signupService: async (firstName: string, lastName: string, email: string, password: string, role: Role, phone: string) => {
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) throw new Error('User already exists');
-  
+
     const hashedPassword = await bcrypt.hash(password, 10);
-  
+
     const newUser = await prisma.user.create({
       data: {
         firstName,
@@ -22,10 +22,10 @@ export const authService = {
         // phone,
       },
     });
-  
+
     const { token, refreshToken } = generateToken(newUser.id);
     await redisClient.setEx(`refresh:${newUser.id}`, 60 * 60 * 24 * 7, refreshToken); // 7 days
-  
+
     return { token, refreshToken, user: newUser };
   },
 
@@ -88,7 +88,7 @@ export const authService = {
         &copy; ${new Date().getFullYear()} Backey Management. All rights reserved.
       </p>
     </div>
-  `;  
+  `;
     await sendEmail(email, 'Reset Password OTP', emailHtml);
 
     return true;
@@ -114,7 +114,7 @@ export const authService = {
       throw new Error('OTP verification required or expired');
     }
 
-    const user = await prisma.user.findUnique({ where: {email } });
+    const user = await prisma.user.findUnique({ where: { email } });
     if (!user) throw new Error('User not found');
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
