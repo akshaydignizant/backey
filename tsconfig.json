@@ -1,9 +1,10 @@
 {
   "compilerOptions": {
-    "target": "es2016",                            // JS version to compile to
+    "target": "es2017",                            // JS version to compile to
     "module": "commonjs",                          // Module system (Node.js uses commonjs)
     "rootDir": "src",                              // Source files location
-    "outDir": "dist",                              // Output folder
+    "outDir": "dist",
+    "types": ["node"],                              // Output folder
     "esModuleInterop": true,                       // Allow default imports from CommonJS modules
     "forceConsistentCasingInFileNames": true,      // Helps avoid case-related bugs (esp. on Linux/macOS)
     "strict": true,                                // Enable all strict type-checking

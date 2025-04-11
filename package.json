@@ -50,6 +50,7 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.17",
     "@types/dotenv-flow": "^3.3.3",
+    "@types/express": "^5.0.1",
     "@types/helmet": "^0.0.48",
     "@types/jsonwebtoken": "^9.0.9",
     "@types/logform": "^1.2.0",
