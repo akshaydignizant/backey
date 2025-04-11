@@ -1,15 +1,16 @@
 {
   "compilerOptions": {
-    "target": "es2017",                            // JS version to compile to
+    "lib": ["es2016", "esnext.asynciterable"],                       // JS version to compile to
     "module": "commonjs",                          // Module system (Node.js uses commonjs)
     "rootDir": "src",                              // Source files location
     "outDir": "dist",
-    // "types": ["node"],                              // Output folder
+    "types": ["node"],                              // Output folder
     "esModuleInterop": true,                       // Allow default imports from CommonJS modules
     "forceConsistentCasingInFileNames": true,      // Helps avoid case-related bugs (esp. on Linux/macOS)
     "strict": true,                                // Enable all strict type-checking
     "skipLibCheck": true                           // Skip type checking of .d.ts files for speed
   },
-  "include": ["src"],
+  // "include": ["src"],
+  "include": ["src/**/*.ts"],       // Include all .ts and .js files in src folder and subfolders
   "exclude": ["node_modules", "dist"]
 }
