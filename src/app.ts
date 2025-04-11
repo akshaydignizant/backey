@@ -91,6 +91,12 @@ app.use(
 )
 app.use(express.json())
 app.use(express.static(path.join(__dirname, '../', 'public')))
+
+// Example using Express
+app.get('/', (req, res) => {
+  res.send('🚀 Backend is running!');
+});
+
 // Main API routes
 app.use('/api/v1/auth', authRoutes)
 app.use('/api/v1/workspaces', workspaceRoutes);
