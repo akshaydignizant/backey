@@ -157,7 +157,7 @@ export const createBoard = async (req: Request, res: Response, next: NextFunctio
     if (!userId)
       res.status(400).json({ success: false, message: 'Missing userId' });
 
-    const board = await workspaceService.createBoard(workspaceId, userId as string, data);
+    const board = await workspaceService.createBoard(workspaceId, data);
     res.status(201).json({ success: true, data: board });
   } catch (error) {
     res.status(500).json({ success: false, message: error || 'Internal server error' });
