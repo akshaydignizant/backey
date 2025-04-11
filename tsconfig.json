@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "lib": ["es2016", "esnext.asynciterable"],                       // JS version to compile to
+    "lib": ["es2022"],                       // JS version to compile to
     "module": "commonjs",                          // Module system (Node.js uses commonjs)
     "rootDir": "src",                              // Source files location
     "outDir": "dist",

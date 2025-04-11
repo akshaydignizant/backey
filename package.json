@@ -2,7 +2,7 @@
   "name": "backey-backend",
   "version": "1.0.0",
   "description": "backend for backey-management",
-  "main": "server.js",
+  "main": "dist/server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "npx tsc",
@@ -47,6 +47,8 @@
     "winston": "^3.17.0"
   },
   "devDependencies": {
+    "@commitlint/cli": "^19.8.0",
+    "@commitlint/config-conventional": "^19.8.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.17",
     "@types/dotenv-flow": "^3.3.3",
@@ -66,5 +68,8 @@
     "prisma": "^6.6.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": "20.x"
   }
 }
