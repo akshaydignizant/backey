@@ -20,7 +20,6 @@
   "license": "ISC",
   "lint-staged": {
     "*.ts": [
-      "npm run lint:fix",
       "npm run format:fix"
     ]
   },
@@ -66,6 +65,7 @@
     "cross-env": "^7.0.3",
     "husky": "^9.1.7",
     "nodemon": "^3.1.9",
+    "prettier": "3.5.3",
     "prisma": "^6.6.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"

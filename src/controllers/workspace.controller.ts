@@ -109,17 +109,38 @@ export const inviteUserToWorkspace = async (
   }
 };
 
+export const acceptInvite = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { invitetoken } = req.params;
 
+    if (!invitetoken) {
+      res.status(400).json({ message: 'Invitation token is required' });
+    }
+
+    const updatedInvitation = await workspaceService.acceptInvitation(invitetoken);
+
+    res.status(200).json({
+      message: 'Invitation accepted successfully',
+      invitation: updatedInvitation,
+    });
+  } catch (error: any) {
+    res.status(404).json({ message: error.message || 'Failed to accept invitation' });
+  }
+};
 // Get Workspace Users
 export const getWorkspaceUsers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const workspaceId = parseInt(req.params.id);
+    const id = parseInt(req.params.workspaceId);
     const userId = req.user?.userId;
 
     if (!userId)
       res.status(400).json({ success: false, message: 'Missing userId' });
 
-    const users = await workspaceService.getWorkspaceUsers(workspaceId, userId as string);
+    const users = await workspaceService.getWorkspaceUsers(id, userId as string);
     res.status(200).json({ success: true, data: users });
   } catch (error) {
     logger.error('Error fetching workspace users:', error);

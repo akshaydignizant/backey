@@ -135,7 +135,7 @@ export const workspaceService = {
     });
   },
 
-  createBoard: async (workspaceId: number, userId: string, data: BoardInput) => {
+  createBoard: async (workspaceId: number, data: BoardInput) => {
     const workspace = await workspaceService.getWorkspace(workspaceId);
     if (!workspace) throw new Error('Workspace not found or no access');
 
@@ -144,7 +144,7 @@ export const workspaceService = {
     return prisma.board.create({
       data: {
         name: data.name,
-        address: data.address, // ✅ guaranteed to be string
+        address: data.address,
         workspace: { connect: { id: workspaceId } },
       },
       include: { workspace: true },

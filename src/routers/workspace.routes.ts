@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createWorkspace, getWorkspace, updateWorkspace, deleteWorkspace, inviteUserToWorkspace, getWorkspaceUsers, createBoard, addUserToBoard } from '../controllers/workspace.controller';
+import { createWorkspace, getWorkspace, updateWorkspace, deleteWorkspace, inviteUserToWorkspace, getWorkspaceUsers, createBoard, addUserToBoard, acceptInvite } from '../controllers/workspace.controller';
 import { authMiddleware } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -10,6 +10,7 @@ router.get('/:workspaceId', authMiddleware, getWorkspace);
 router.put('/:workspaceId', authMiddleware, updateWorkspace);
 router.delete('/:workspaceId', authMiddleware, deleteWorkspace);
 router.post('/:workspaceId/invite', authMiddleware, inviteUserToWorkspace);
+router.post('/invitation/accept/:invitetoken', authMiddleware, acceptInvite);
 router.get('/:workspaceId/users', authMiddleware, getWorkspaceUsers);
 
 // Board Operations

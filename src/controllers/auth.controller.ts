@@ -8,7 +8,7 @@ export const authController = {
   signup: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { firstName, lastName, email, password, phone } = req.body;
-      if (!firstName || !lastName || !email || !password) {
+      if (!firstName || !email || !password) {
         return httpResponse(req, res, 400, 'All fields are required');
       }
       if (password.length < 6) {
@@ -76,10 +76,10 @@ export const authController = {
   forgotPassword: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { email } = req.body;
-      if (!email) return httpResponse(req, res, 400, "Email is required");
+      if (!email) return httpResponse(req, res, 400, 'Email is required');
 
       await authService.forgotPasswordService(email);
-      return httpResponse(req, res, 200, "OTP sent to email");
+      return httpResponse(req, res, 200, 'OTP sent to email');
     } catch (err) {
       httpError(next, err, req, 500);
     }
@@ -87,10 +87,10 @@ export const authController = {
   verifyOtp: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { otp } = req.body;
-      if (!otp) return httpResponse(req, res, 400, "OTP is required");
+      if (!otp) return httpResponse(req, res, 400, 'OTP is required');
 
       const resetToken = await authService.verifyOtpService(otp);
-      return httpResponse(req, res, 200, "OTP verified", { resetToken });
+      return httpResponse(req, res, 200, 'OTP verified', { resetToken });
     } catch (err) {
       httpError(next, err, req, 500);
     }
@@ -100,10 +100,10 @@ export const authController = {
     try {
       const { resetToken, newPassword } = req.body;
       if (!resetToken || !newPassword)
-        return httpResponse(req, res, 400, "Reset token and new password are required");
+        return httpResponse(req, res, 400, 'Reset token and new password are required');
 
       await authService.resetPasswordService(resetToken, newPassword);
-      return httpResponse(req, res, 200, "Password reset successful");
+      return httpResponse(req, res, 200, 'Password reset successful');
     } catch (err) {
       httpError(next, err, req, 500);
     }
