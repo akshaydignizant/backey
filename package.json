@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "tsc",
+    "build": "tsc && npm install && prisma generate --schema=./prisma/schema.prisma",
     "dev": "cross-env NODE_ENV=development nodemon --legacy-watch src/server.ts",
     "start": "cross-env NODE_ENV=production node dist/server.js",
     "lint": "eslint",
