@@ -1,6 +1,3 @@
-// ----------------------------
-// Generator & Datasource
-// ----------------------------
 generator client {
   provider = "prisma-client-js"
   output   = "./generated/prisma-client-js"
@@ -62,12 +59,6 @@ model User {
   phoneVerified   Boolean    @default(false)
   emailVerified   Boolean    @default(false)
   isActive        Boolean    @default(true)
-  isBanned        Boolean    @default(false)
-  isDeleted       Boolean    @default(false)
-  isStaff         Boolean    @default(false)
-  isAdmin         Boolean    @default(true)
-  isManager       Boolean    @default(false)
-  isSuperAdmin    Boolean    @default(false)
   profileImageUrl String?
   lastLogin       DateTime?
   createdAt       DateTime   @default(now())
@@ -95,8 +86,8 @@ model Workspace {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  owner   User?   @relation("OwnedWorkspaces", fields: [ownerId], references: [id])
-  ownerId String?
+  owner   User?  @relation("OwnedWorkspaces", fields: [ownerId], references: [id])
+  ownerId String
 
   users           User[]           @relation("UserWorkspaces")
   boards          Board[]
@@ -147,10 +138,6 @@ model RolePermission {
 
   @@unique([workspaceId, role, permission])
 }
-
-// ----------------------------
-// Business Models
-// ----------------------------
 
 model Product {
   id          String   @id @default(uuid())
@@ -209,10 +196,6 @@ model Category {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
-
-// ----------------------------
-// Commerce
-// ----------------------------
 
 model Order {
   id                String @id @default(uuid())
@@ -284,10 +267,6 @@ model CartItem {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
-
-// ----------------------------
-// Extras
-// ----------------------------
 
 model userAddress {
   id         String  @id @default(uuid())

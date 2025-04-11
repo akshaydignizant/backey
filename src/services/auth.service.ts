@@ -3,6 +3,9 @@ import prisma from '../util/prisma';
 import redisClient from '../cache/redisClient';
 import { generateToken } from '../util/generateToken';
 import sendEmail from '../util/sendEmail';
+import httpError from '../util/httpError';
+import { NextFunction } from 'express';
+import crypto from "crypto";
 
 export const authService = {
   signupService: async (firstName: string, lastName: string, email: string, password: string, phone: string) => {
@@ -27,8 +30,15 @@ export const authService = {
     return { token, refreshToken, user: newUser };
   },
 
-  signin: async (email: string, password: string) => {
-    const user = await prisma.user.findUnique({ where: { email } });
+  signInService: async (email: string, password: string) => {
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        password: true,
+      }
+    });
     if (!user || !(await bcrypt.compare(password, user.password))) {
       throw new Error('Invalid email or password');
     }
@@ -60,12 +70,16 @@ export const authService = {
   },
 
 
-  forgotPassword: async (email: string) => {
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) throw new Error('No account found with this email');
+  forgotPasswordService: async (email: string) => {
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { firstName: true, email: true }
+    });
+
+    if (!user) throw new Error("User not found");
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    await redisClient.setEx(`otp:${email}`, 300, otp); // Store OTP with email as key
+    await redisClient.set(`otp:${otp}`, user.email, { EX: 300 });
 
     const emailHtml = `
     <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
@@ -87,41 +101,47 @@ export const authService = {
       </p>
     </div>
   `;
-    await sendEmail(email, 'Reset Password OTP', emailHtml);
+    await sendEmail(user.email, "Password Reset OTP", emailHtml);
 
     return true;
   },
 
-  verifyOtp: async (otp: string) => {
+  verifyOtpService: async (otp: string) => {
     const email = await redisClient.get(`otp:${otp}`);
-    if (!email) throw new Error('OTP expired or invalid');
+    if (!email) throw new Error("OTP expired or invalid");
 
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) throw new Error('User not found');
+    const user = await prisma.user.findUnique({
+      where: { email }
+      , select: { id: true, email: true }
+    });
+    if (!user) throw new Error("User not found");
 
-    // Store for password reset
-    await redisClient.setEx(`reset:${email}`, 300, email);
+    const resetToken = crypto.randomBytes(20).toString("hex");
+    await redisClient.set(`reset:${resetToken}`, email, { EX: 300 });
+
     await redisClient.del(`otp:${otp}`);
-
-    return email;
+    return resetToken;
   },
 
-  resetPassword: async (email: string, newPassword: string) => {
-    const storedEmail = await redisClient.get(`reset:${email}`);
-    if (!storedEmail || storedEmail !== email) {
-      throw new Error('OTP verification required or expired');
-    }
 
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) throw new Error('User not found');
+  resetPasswordService: async (resetToken: string, newPassword: string) => {
+    const email = await redisClient.get(`reset:${resetToken}`);
+    if (!email) throw new Error("OTP verification required or expired");
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true }
+    });
+    if (!user) throw new Error("User not found");
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await prisma.user.update({
       where: { email },
       data: { password: hashedPassword },
+      select: { id: true, email: true, password: true }
     });
 
-    await redisClient.del(`reset:${email}`);
+    await redisClient.del(`reset:${resetToken}`);
     return true;
-  },
+  }
 };

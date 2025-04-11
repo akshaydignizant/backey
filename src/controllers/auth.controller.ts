@@ -44,7 +44,7 @@ export const authController = {
   signin: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { email, password } = req.body;
-      const data = await authService.signin(email, password);
+      const data = await authService.signInService(email, password);
       httpResponse(req, res, 200, 'Login successful', data);
     } catch (err) {
       httpError(next, err, req);
@@ -76,19 +76,21 @@ export const authController = {
   forgotPassword: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { email } = req.body;
-      await authService.forgotPassword(email);
-      httpResponse(req, res, 200, 'OTP sent to email');
+      if (!email) return httpResponse(req, res, 400, "Email is required");
+
+      await authService.forgotPasswordService(email);
+      return httpResponse(req, res, 200, "OTP sent to email");
     } catch (err) {
-      httpError(next, err, req);
+      httpError(next, err, req, 500);
     }
   },
   verifyOtp: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { otp } = req.body;
-      if (!otp) return httpResponse(req, res, 400, 'OTP is required');
+      if (!otp) return httpResponse(req, res, 400, "OTP is required");
 
-      const userEmail = await authService.verifyOtp(otp);
-      return httpResponse(req, res, 200, 'OTP verified successfully', { userEmail });
+      const resetToken = await authService.verifyOtpService(otp);
+      return httpResponse(req, res, 200, "OTP verified", { resetToken });
     } catch (err) {
       httpError(next, err, req, 500);
     }
@@ -96,13 +98,12 @@ export const authController = {
 
   resetPassword: async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { email, newPassword } = req.body;
-      if (!email || !newPassword) {
-        return httpResponse(req, res, 400, 'Email and new password are required');
-      }
+      const { resetToken, newPassword } = req.body;
+      if (!resetToken || !newPassword)
+        return httpResponse(req, res, 400, "Reset token and new password are required");
 
-      await authService.resetPassword(email, newPassword);
-      return httpResponse(req, res, 200, 'Your password has been changed successfully');
+      await authService.resetPasswordService(resetToken, newPassword);
+      return httpResponse(req, res, 200, "Password reset successful");
     } catch (err) {
       httpError(next, err, req, 500);
     }

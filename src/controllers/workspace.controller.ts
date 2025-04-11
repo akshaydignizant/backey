@@ -6,15 +6,16 @@ import { WorkspaceResponse } from '../models/types';
 // Create Workspace
 export const createWorkspace = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { ...data } = req.body;
     const userId = req.user?.userId;
-    if (!userId)
+    if (!userId) {
       res.status(400).json({ success: false, message: 'Missing userId' });
+    }
 
-    const workspace = await workspaceService.createWorkspace(userId as string, data);
+    const workspace = await workspaceService.createWorkspace(userId as string, req.body);
     res.status(201).json({ success: true, data: workspace });
   } catch (error) {
-    res.status(500).json({ success: false, message: error || 'Internal server error' });
+    logger.error('Error creating workspace:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };
 
@@ -27,7 +28,7 @@ export const getWorkspace = async (req: Request, res: Response, next: NextFuncti
     if (!userId)
       res.status(400).json({ success: false, message: 'Missing userId' });
 
-    const workspace = await workspaceService.getWorkspace(workspaceId, userId as string);
+    const workspace = await workspaceService.getWorkspace(workspaceId);
     if (!workspace)
       res.status(404).json({ success: false, message: 'Workspace not found' });
 
@@ -70,28 +71,44 @@ export const deleteWorkspace = async (req: Request, res: Response, next: NextFun
 };
 
 // Invite User
-export const inviteUserToWorkspace = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const inviteUserToWorkspace = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   try {
-    const workspaceId = parseInt(req.params.workspaceId);
+    const workspaceId = Number(req.params.workspaceId);
+    if (isNaN(workspaceId)) {
+      res.status(400).json({ success: false, message: 'Invalid workspaceId' });
+    }
+
     const { email, role, boardId } = req.body;
     const userId = req.user?.userId;
-    if (!userId || !email || !role || !boardId) {
 
+    if (!userId || !email || !role || !boardId) {
       res.status(400).json({ success: false, message: 'Missing required fields' });
     }
 
-    const invitation = await workspaceService.inviteUserToWorkspace(workspaceId, userId as string, {
-      email,
-      role,
-      boardId,
-    });
+    const invitation = await workspaceService.inviteUserToWorkspace(
+      {
+        email,
+        role,
+        boardId: Number(boardId),
+        workspaceId,
+      },
+      userId as string
+    );
 
     res.status(201).json({ success: true, data: invitation });
   } catch (error) {
     logger.error('Error inviting user:', error);
-    res.status(500).json({ success: false, message: error || 'Internal server error' });
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Internal server error',
+    });
   }
 };
+
 
 // Get Workspace Users
 export const getWorkspaceUsers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {

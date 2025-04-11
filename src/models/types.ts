@@ -14,8 +14,9 @@ export interface WorkspaceInput {
 
 export interface InviteUserInput {
   email: string;
-  role: Role;
+  role: Role; // If you have enum imported, else use string
   boardId: number;
+  workspaceId: number;
 }
 
 export interface WorkspaceResponse {
