@@ -1,4 +1,4 @@
-import { InvitationStatus, Role } from "@prisma/client";
+import { InvitationStatus, Prisma, Role } from "@prisma/client";
 import { WorkspaceInput } from "../types/workspace.types";
 import prisma from "../util/prisma";
 import { v4 as uuidv4 } from 'uuid';
@@ -95,15 +95,20 @@ export const workspaceService = {
 
   getWorkspace: async ({ search, page, limit }: SearchParams) => {
     try {
-      const whereClause = search
-        ? {
-          OR: [
-            { id: !isNaN(Number(search)) ? Number(search) : undefined },
-            { name: { contains: search, mode: 'insensitive' } },
-            { slug: { contains: search, mode: 'insensitive' } },
-          ].filter(Boolean) as any[],
+      const filters: Prisma.WorkspaceWhereInput[] = [];
+
+      if (search) {
+        if (!isNaN(Number(search))) {
+          filters.push({ id: Number(search) });
         }
-        : {};
+
+        filters.push(
+          { name: { contains: search, mode: 'insensitive' } },
+          { slug: { contains: search, mode: 'insensitive' } }
+        );
+      }
+
+      const whereClause: Prisma.WorkspaceWhereInput = filters.length > 0 ? { OR: filters } : {};
 
       const [data, total] = await Promise.all([
         prisma.workspace.findMany({
@@ -440,7 +445,7 @@ export const workspaceService = {
 
     if (!existing) throw new Error('Role permission not found');
 
-    const updatedPermissions = existing.permission.filter(p => p !== permissionToRemove);
+    const updatedPermissions = existing.permission.filter((p) => p !== permissionToRemove);
 
     return prisma.rolePermission.update({
       where: { id: existing.id },
