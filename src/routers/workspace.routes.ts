@@ -28,4 +28,6 @@ router.delete('/invitations/:invitationId', authMiddleware, roleRestriction([Rol
 router.get('/:workspaceId/roles/:role/permissions', authMiddleware, getRolePermissions);
 router.delete('/:workspaceId/roles/:role/permissions', authMiddleware, roleRestriction([Role.ADMIN]), removeRolePermission);
 
+// router.get('/:workspaceId/export', authMiddleware, roleRestriction([Role.ADMIN]), exportWorkspaceData);
+
 export default router;

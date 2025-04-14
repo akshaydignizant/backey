@@ -34,35 +34,47 @@ export const authService = {
     const user = await prisma.user.findUnique({
       where: { email },
       select: {
-        id: true, email: true, password: true, phone: true,
-        firstName: true, lastName: true, role: true,
-        isActive: true, createdAt: true, updatedAt: true, lastLogin: true,
+        id: true,
+        email: true,
+        password: true,
+        phone: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+        lastLogin: true,
       },
     });
 
     if (!user) {
-      throw new Error('Invalid email or password');
+      throw new Error('Invalid email or password'); // Could log more specific info but avoid exposing sensitive data
     }
 
+    // Check if the password is valid
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
       throw new Error('Invalid email or password');
     }
 
-    // Update last login after successful authentication
+    // Update the last login time
     await prisma.user.update({
       where: { id: user.id },
       data: { lastLogin: new Date() },
     });
 
+    // Generate tokens
     const { token, refreshToken } = generateToken(user.id, user.role as Role);
 
+    // Store tokens in Redis
     await Promise.all([
       redisClient.setEx(`auth:${user.id}`, RedisTTL.ACCESS_TOKEN, token),
-      redisClient.setEx(`refresh:${user.id}`, RedisTTL.REFRESH_TOKEN, refreshToken)
+      redisClient.setEx(`refresh:${user.id}`, RedisTTL.REFRESH_TOKEN, refreshToken),
     ]);
 
-    return { token, refreshToken, user };
+    // Return token and user information
+    return { token, refreshToken, user: { id: user.id, email: user.email, role: user.role } }; // Only return essential user data
   },
 
   refreshToken: async (userId: string, oldRefreshToken: string, role: string) => {
