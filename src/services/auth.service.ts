@@ -3,9 +3,7 @@ import prisma from '../util/prisma';
 import redisClient, { RedisTTL } from '../cache/redisClient';
 import { generateToken } from '../util/generateToken';
 import sendEmail from '../util/sendEmail';
-import httpError from '../util/httpError';
-import { NextFunction } from 'express';
-import crypto from "crypto";
+import crypto from 'crypto';
 import { Role } from '@prisma/client';
 
 export const authService = {
@@ -33,9 +31,8 @@ export const authService = {
   },
 
   signInService: async (email: string, password: string) => {
-    const user = await prisma.user.update({
+    const user = await prisma.user.findUnique({
       where: { email },
-      data: { lastLogin: new Date() },
       select: {
         id: true, email: true, password: true, phone: true,
         firstName: true, lastName: true, role: true,
@@ -43,17 +40,23 @@ export const authService = {
       },
     });
 
-
-    await prisma.user.update({
-      where: { id: user?.id },
-      data: { lastLogin: new Date() },
-    });
-
-    if (!user || !(await bcrypt.compare(password, user.password))) {
+    if (!user) {
       throw new Error('Invalid email or password');
     }
 
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      throw new Error('Invalid email or password');
+    }
+
+    // Update last login after successful authentication
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLogin: new Date() },
+    });
+
     const { token, refreshToken } = generateToken(user.id, user.role as Role);
+
     await Promise.all([
       redisClient.setEx(`auth:${user.id}`, RedisTTL.ACCESS_TOKEN, token),
       redisClient.setEx(`refresh:${user.id}`, RedisTTL.REFRESH_TOKEN, refreshToken)
@@ -89,7 +92,7 @@ export const authService = {
       select: { firstName: true, email: true }
     });
 
-    if (!user) throw new Error("User not found");
+    if (!user) throw new Error('User not found');
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     await redisClient.set(`otp:${otp}`, user.email, { EX: 300 });
@@ -114,22 +117,22 @@ export const authService = {
       </p>
     </div>
   `;
-    await sendEmail(user.email, "Password Reset OTP", emailHtml);
+    await sendEmail(user.email, 'Password Reset OTP', emailHtml);
 
     return true;
   },
 
   verifyOtpService: async (otp: string) => {
     const email = await redisClient.get(`otp:${otp}`);
-    if (!email) throw new Error("OTP expired or invalid");
+    if (!email) throw new Error('OTP expired or invalid');
 
     const user = await prisma.user.findUnique({
       where: { email }
       , select: { id: true, email: true }
     });
-    if (!user) throw new Error("User not found");
+    if (!user) throw new Error('User not found');
 
-    const resetToken = crypto.randomBytes(20).toString("hex");
+    const resetToken = crypto.randomBytes(20).toString('hex');
     await redisClient.set(`reset:${resetToken}`, email, { EX: 300 });
 
     await redisClient.del(`otp:${otp}`);
@@ -139,13 +142,13 @@ export const authService = {
 
   resetPasswordService: async (resetToken: string, newPassword: string) => {
     const email = await redisClient.get(`reset:${resetToken}`);
-    if (!email) throw new Error("OTP verification required or expired");
+    if (!email) throw new Error('OTP verification required or expired');
 
     const user = await prisma.user.findUnique({
       where: { email },
       select: { id: true, email: true }
     });
-    if (!user) throw new Error("User not found");
+    if (!user) throw new Error('User not found');
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await prisma.user.update({
