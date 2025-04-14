@@ -1,14 +1,15 @@
 import bcrypt from 'bcryptjs';
 import prisma from '../util/prisma';
-import redisClient from '../cache/redisClient';
+import redisClient, { RedisTTL } from '../cache/redisClient';
 import { generateToken } from '../util/generateToken';
 import sendEmail from '../util/sendEmail';
 import httpError from '../util/httpError';
 import { NextFunction } from 'express';
 import crypto from "crypto";
+import { Role } from '@prisma/client';
 
 export const authService = {
-  signupService: async (firstName: string, lastName: string, email: string, password: string, phone: string) => {
+  signupService: async (firstName: string, lastName: string, email: string, password: string, phone: string, role: Role) => {
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) throw new Error('User already exists');
 
@@ -20,49 +21,61 @@ export const authService = {
         lastName,
         email,
         password: hashedPassword,
+        role,
         // phone,
       },
     });
 
-    const { token, refreshToken } = generateToken(newUser.id);
+    const { token, refreshToken } = generateToken(newUser.id, newUser.role as Role);
     await redisClient.setEx(`refresh:${newUser.id}`, 60 * 60 * 24 * 7, refreshToken); // 7 days
 
     return { token, refreshToken, user: newUser };
   },
 
   signInService: async (email: string, password: string) => {
-    const user = await prisma.user.findUnique({
+    const user = await prisma.user.update({
       where: { email },
+      data: { lastLogin: new Date() },
       select: {
-        id: true,
-        email: true,
-        password: true,
-      }
+        id: true, email: true, password: true, phone: true,
+        firstName: true, lastName: true, role: true,
+        isActive: true, createdAt: true, updatedAt: true, lastLogin: true,
+      },
     });
+
+
+    await prisma.user.update({
+      where: { id: user?.id },
+      data: { lastLogin: new Date() },
+    });
+
     if (!user || !(await bcrypt.compare(password, user.password))) {
       throw new Error('Invalid email or password');
     }
 
-    const { token, refreshToken } = generateToken(user.id);
-    await redisClient.setEx(`auth:${user.id}`, 3600, token); // 1 hour
-    await redisClient.setEx(`refresh:${user.id}`, 604800, refreshToken); // 7 days
+    const { token, refreshToken } = generateToken(user.id, user.role as Role);
+    await Promise.all([
+      redisClient.setEx(`auth:${user.id}`, RedisTTL.ACCESS_TOKEN, token),
+      redisClient.setEx(`refresh:${user.id}`, RedisTTL.REFRESH_TOKEN, refreshToken)
+    ]);
 
     return { token, refreshToken, user };
   },
 
-  refreshToken: async (userId: string, oldRefreshToken: string) => {
+  refreshToken: async (userId: string, oldRefreshToken: string, role: string) => {
     const storedRefreshToken = await redisClient.get(`refresh:${userId}`);
     if (!storedRefreshToken || storedRefreshToken !== oldRefreshToken) {
       throw new Error('Refresh token is invalid or expired');
     }
 
-    const { token, refreshToken } = generateToken(userId);
-    await redisClient.setEx(`auth:${userId}`, 3600, token);
-    await redisClient.setEx(`refresh:${userId}`, 604800, refreshToken);
+    const { token, refreshToken } = generateToken(userId, role as Role);
+    await Promise.all([
+      await redisClient.setEx(`auth:${userId}`, RedisTTL.ACCESS_TOKEN, token),
+      await redisClient.setEx(`refresh:${userId}`, RedisTTL.REFRESH_TOKEN, refreshToken)
+    ]);
 
     return { token, refreshToken };
   },
-
 
   logout: async (userId: string) => {
     await redisClient.del(`auth:${userId}`);

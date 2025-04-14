@@ -1,5 +1,11 @@
 -- CreateEnum
-CREATE TYPE "Role" AS ENUM ('ADMIN', 'MANAGER', 'CUSTOMER', 'STAFF');
+CREATE TYPE "Role" AS ENUM ('ADMIN', 'MANAGER', 'STAFF', 'CUSTOMER');
+
+-- CreateEnum
+CREATE TYPE "UserStatus" AS ENUM ('ACTIVE', 'SUSPENDED', 'DEACTIVATED');
+
+-- CreateEnum
+CREATE TYPE "InvitationStatus" AS ENUM ('PENDING', 'ACCEPTED', 'EXPIRED', 'REVOKED');
 
 -- CreateEnum
 CREATE TYPE "PaymentMethod" AS ENUM ('MPESA', 'EMOLA', 'CASH');
@@ -8,40 +14,18 @@ CREATE TYPE "PaymentMethod" AS ENUM ('MPESA', 'EMOLA', 'CASH');
 CREATE TYPE "OrderStatus" AS ENUM ('PENDING', 'PROCESSING', 'DELIVERED', 'CANCELLED');
 
 -- CreateTable
-CREATE TABLE "Workspace" (
-    "id" SERIAL NOT NULL,
-    "name" TEXT NOT NULL,
-    "slug" TEXT NOT NULL,
-    "description" TEXT,
-    "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-    "ownerId" TEXT,
-    "userId" TEXT,
-
-    CONSTRAINT "Workspace_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL,
-    "firstName" VARCHAR(100) NOT NULL,
-    "lastName" VARCHAR(100),
+    "firstName" TEXT NOT NULL,
+    "lastName" TEXT,
     "email" TEXT NOT NULL,
     "password" TEXT NOT NULL,
-    "role" "Role" NOT NULL DEFAULT 'CUSTOMER',
-    "termsConditions" BOOLEAN NOT NULL DEFAULT false,
-    "phone" VARCHAR(15),
+    "phone" TEXT,
+    "role" "Role" DEFAULT 'CUSTOMER',
+    "status" "UserStatus" NOT NULL DEFAULT 'ACTIVE',
     "phoneVerified" BOOLEAN NOT NULL DEFAULT false,
     "emailVerified" BOOLEAN NOT NULL DEFAULT false,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "isBanned" BOOLEAN NOT NULL DEFAULT false,
-    "isDeleted" BOOLEAN NOT NULL DEFAULT false,
-    "isStaff" BOOLEAN NOT NULL DEFAULT false,
-    "isAdmin" BOOLEAN NOT NULL DEFAULT false,
-    "isManager" BOOLEAN NOT NULL DEFAULT false,
-    "isSuperAdmin" BOOLEAN NOT NULL DEFAULT false,
-    "isOwner" BOOLEAN NOT NULL DEFAULT false,
     "profileImageUrl" TEXT,
     "lastLogin" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -51,34 +35,30 @@ CREATE TABLE "User" (
 );
 
 -- CreateTable
-CREATE TABLE "Address" (
-    "id" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "label" TEXT,
-    "street" TEXT NOT NULL,
-    "city" TEXT NOT NULL,
-    "region" TEXT NOT NULL,
-    "postalCode" TEXT NOT NULL,
-    "country" TEXT NOT NULL,
-    "isDefault" BOOLEAN NOT NULL DEFAULT false,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "Address_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "Category" (
-    "id" TEXT NOT NULL,
+CREATE TABLE "Workspace" (
+    "id" SERIAL NOT NULL,
     "name" TEXT NOT NULL,
     "slug" TEXT NOT NULL,
     "description" TEXT,
-    "parentId" TEXT,
+    "images" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "openingTime" TEXT,
+    "closingTime" TEXT,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
-    "workspaceId" INTEGER,
+    "ownerId" TEXT NOT NULL,
 
-    CONSTRAINT "Category_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "Workspace_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "RolePermission" (
+    "id" SERIAL NOT NULL,
+    "workspaceId" INTEGER NOT NULL,
+    "role" "Role" NOT NULL,
+    "permission" TEXT NOT NULL,
+
+    CONSTRAINT "RolePermission_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -88,9 +68,9 @@ CREATE TABLE "Product" (
     "slug" TEXT NOT NULL,
     "description" TEXT NOT NULL,
     "images" TEXT[],
-    "categoryId" TEXT NOT NULL,
-    "workspaceId" INTEGER,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "categoryId" TEXT NOT NULL,
+    "workspaceId" INTEGER NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -115,31 +95,33 @@ CREATE TABLE "ProductVariant" (
 );
 
 -- CreateTable
-CREATE TABLE "CartItem" (
+CREATE TABLE "Category" (
     "id" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "variantId" TEXT NOT NULL,
-    "quantity" INTEGER NOT NULL,
+    "name" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "description" TEXT,
+    "parentId" TEXT,
+    "workspaceId" INTEGER NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "CartItem_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "Category_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Order" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
-    "paymentMethod" "PaymentMethod" NOT NULL,
     "shippingAddressId" TEXT NOT NULL,
     "billingAddressId" TEXT NOT NULL,
+    "workspaceId" INTEGER NOT NULL,
+    "paymentMethod" "PaymentMethod" NOT NULL,
     "totalAmount" DOUBLE PRECISION NOT NULL,
     "status" "OrderStatus" NOT NULL DEFAULT 'PENDING',
     "notes" TEXT,
     "placedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
-    "workspaceId" INTEGER,
 
     CONSTRAINT "Order_pkey" PRIMARY KEY ("id")
 );
@@ -180,21 +162,50 @@ CREATE TABLE "BillItem" (
 );
 
 -- CreateTable
-CREATE TABLE "Store" (
+CREATE TABLE "CartItem" (
     "id" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "description" TEXT,
-    "contactEmail" TEXT NOT NULL,
-    "contactPhone" TEXT NOT NULL,
-    "operationalHours" TEXT NOT NULL,
-    "address" TEXT NOT NULL,
-    "logoUrl" TEXT,
-    "workspaceId" INTEGER,
-    "instagramHandle" TEXT,
-    "facebookPage" TEXT,
-    "deliveryAvailable" BOOLEAN NOT NULL DEFAULT true,
+    "userId" TEXT NOT NULL,
+    "variantId" TEXT NOT NULL,
+    "quantity" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "Store_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "CartItem_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Address" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "address" TEXT NOT NULL,
+    "street" TEXT,
+    "city" TEXT NOT NULL,
+    "region" TEXT NOT NULL,
+    "postalCode" TEXT NOT NULL,
+    "country" TEXT NOT NULL,
+    "isDefault" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Address_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Invitation" (
+    "id" SERIAL NOT NULL,
+    "email" TEXT NOT NULL,
+    "tempPassword" TEXT NOT NULL,
+    "inviteToken" TEXT NOT NULL,
+    "status" "InvitationStatus" NOT NULL DEFAULT 'PENDING',
+    "role" "Role" NOT NULL,
+    "workspaceId" INTEGER NOT NULL,
+    "invitedById" TEXT NOT NULL,
+    "invitedUserId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "acceptedAt" TIMESTAMP(3),
+
+    CONSTRAINT "Invitation_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -206,16 +217,19 @@ CREATE TABLE "_UserWorkspaces" (
 );
 
 -- CreateIndex
+CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "User_phone_key" ON "User"("phone");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Workspace_name_key" ON "Workspace"("name");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Workspace_slug_key" ON "Workspace"("slug");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
-
--- CreateIndex
-CREATE UNIQUE INDEX "Category_slug_key" ON "Category"("slug");
+CREATE UNIQUE INDEX "RolePermission_workspaceId_role_permission_key" ON "RolePermission"("workspaceId", "role", "permission");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Product_slug_key" ON "Product"("slug");
@@ -224,37 +238,34 @@ CREATE UNIQUE INDEX "Product_slug_key" ON "Product"("slug");
 CREATE UNIQUE INDEX "ProductVariant_sku_key" ON "ProductVariant"("sku");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Category_slug_key" ON "Category"("slug");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Invitation_inviteToken_key" ON "Invitation"("inviteToken");
+
+-- CreateIndex
 CREATE INDEX "_UserWorkspaces_B_index" ON "_UserWorkspaces"("B");
 
 -- AddForeignKey
-ALTER TABLE "Workspace" ADD CONSTRAINT "Workspace_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Workspace" ADD CONSTRAINT "Workspace_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Workspace" ADD CONSTRAINT "Workspace_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Address" ADD CONSTRAINT "Address_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Category" ADD CONSTRAINT "Category_parentId_fkey" FOREIGN KEY ("parentId") REFERENCES "Category"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Category" ADD CONSTRAINT "Category_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "RolePermission" ADD CONSTRAINT "RolePermission_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Product" ADD CONSTRAINT "Product_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "Category"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Product" ADD CONSTRAINT "Product_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Product" ADD CONSTRAINT "Product_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ProductVariant" ADD CONSTRAINT "ProductVariant_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "CartItem" ADD CONSTRAINT "CartItem_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Category" ADD CONSTRAINT "Category_parentId_fkey" FOREIGN KEY ("parentId") REFERENCES "Category"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "CartItem" ADD CONSTRAINT "CartItem_variantId_fkey" FOREIGN KEY ("variantId") REFERENCES "ProductVariant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Category" ADD CONSTRAINT "Category_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Order" ADD CONSTRAINT "Order_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -266,7 +277,7 @@ ALTER TABLE "Order" ADD CONSTRAINT "Order_shippingAddressId_fkey" FOREIGN KEY ("
 ALTER TABLE "Order" ADD CONSTRAINT "Order_billingAddressId_fkey" FOREIGN KEY ("billingAddressId") REFERENCES "Address"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Order" ADD CONSTRAINT "Order_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Order" ADD CONSTRAINT "Order_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "OrderItem" ADD CONSTRAINT "OrderItem_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -284,7 +295,22 @@ ALTER TABLE "BillItem" ADD CONSTRAINT "BillItem_billId_fkey" FOREIGN KEY ("billI
 ALTER TABLE "BillItem" ADD CONSTRAINT "BillItem_variantId_fkey" FOREIGN KEY ("variantId") REFERENCES "ProductVariant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Store" ADD CONSTRAINT "Store_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "CartItem" ADD CONSTRAINT "CartItem_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CartItem" ADD CONSTRAINT "CartItem_variantId_fkey" FOREIGN KEY ("variantId") REFERENCES "ProductVariant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Address" ADD CONSTRAINT "Address_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Invitation" ADD CONSTRAINT "Invitation_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Invitation" ADD CONSTRAINT "Invitation_invitedById_fkey" FOREIGN KEY ("invitedById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Invitation" ADD CONSTRAINT "Invitation_invitedUserId_fkey" FOREIGN KEY ("invitedUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "_UserWorkspaces" ADD CONSTRAINT "_UserWorkspaces_A_fkey" FOREIGN KEY ("A") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;

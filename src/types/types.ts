@@ -1,4 +1,6 @@
+import { Role } from "@prisma/client";
 import { Request } from "express";
+import jwt from 'jsonwebtoken';
 export type THttpResponse = {
     success: boolean
     statusCode: number
@@ -34,6 +36,21 @@ declare module "express-serve-static-core" {
             userId: string;
             id?: string
             userEmail: string;
+            role: Role | null;
+            workspaceId?: string;
         };
     }
-  }
+}
+
+
+
+export interface JwtPayloadWithUserId extends jwt.JwtPayload {
+    userId: string;
+    role?: string;
+}
+
+export interface SearchParams {
+    search?: string;
+    page: number;
+    limit: number;
+}
