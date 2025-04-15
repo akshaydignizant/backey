@@ -8,7 +8,14 @@ import { Role } from '@prisma/client';
 
 export const authService = {
   signupService: async (firstName: string, lastName: string, email: string, password: string, phone: string, role: Role) => {
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+      },
+    });
+
     if (existingUser) throw new Error('User already exists');
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -20,14 +27,14 @@ export const authService = {
         email,
         password: hashedPassword,
         role,
-        // phone,
+        phone,
       },
     });
 
-    const { token, refreshToken } = generateToken(newUser.id, newUser.role as Role);
-    await redisClient.setEx(`refresh:${newUser.id}`, 60 * 60 * 24 * 7, refreshToken); // 7 days
+    // const { token, refreshToken } = generateToken(newUser.id, newUser.role as Role);
+    // await redisClient.setEx(`refresh:${newUser.id}`, 60 * 60 * 24 * 7, refreshToken); // 7 days
 
-    return { token, refreshToken, user: newUser };
+    return { user: newUser };
   },
 
   signInService: async (email: string, password: string) => {
@@ -61,6 +68,7 @@ export const authService = {
     // Update the last login time
     await prisma.user.update({
       where: { id: user.id },
+      select: { id: true, lastLogin: true },
       data: { lastLogin: new Date() },
     });
 

@@ -58,7 +58,7 @@ export const authController = {
       return httpResponse(req, res, 201, 'User registered successfully', data);
 
     } catch (err) {
-      httpError(next, err, req);
+      return httpError(next, err, req);
     }
   },
 

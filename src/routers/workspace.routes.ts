@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createWorkspace, getWorkspace, updateWorkspace, deleteWorkspace, inviteUserToWorkspace, getWorkspaceUsers, acceptInvite, assignRolePermission, removeUserFromWorkspace, getAdminWorkspaces, toggleWorkspaceStatus, revokeInvitation, getRolePermissions, removeRolePermission, getWorkspacesByUserId } from '../controllers/workspace.controller';
+import { createWorkspace, getWorkspace, updateWorkspace, deleteWorkspace, inviteUserToWorkspace, getWorkspaceUsers, acceptInvite, assignRolePermission, removeUserFromWorkspace, getAdminWorkspaces, toggleWorkspaceStatus, revokeInvitation, getRolePermissions, removeRolePermission, getWorkspacesByUserId, exportWorkspaceData } from '../controllers/workspace.controller';
 import { authMiddleware } from '../middleware/auth.middleware';
 import roleRestriction from '../middleware/roleRestriction';
 import { Role } from '@prisma/client';
@@ -22,12 +22,12 @@ router.get('/:workspaceId/users', authMiddleware, getWorkspaceUsers);
 
 router.patch('/:workspaceId/status', authMiddleware, roleRestriction([Role.ADMIN]), toggleWorkspaceStatus);
 
-router.delete('/invitations/:invitationId', authMiddleware, roleRestriction([Role.ADMIN]), revokeInvitation);
+router.patch('/invitations/:invitationId', authMiddleware, roleRestriction([Role.ADMIN]), revokeInvitation);
 
 
 router.get('/:workspaceId/roles/:role/permissions', authMiddleware, getRolePermissions);
 router.delete('/:workspaceId/roles/:role/permissions', authMiddleware, roleRestriction([Role.ADMIN]), removeRolePermission);
 
-// router.get('/:workspaceId/export', authMiddleware, roleRestriction([Role.ADMIN]), exportWorkspaceData);
+router.get('/:workspaceId/export', authMiddleware, roleRestriction([Role.ADMIN]), exportWorkspaceData);
 
 export default router;

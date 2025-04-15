@@ -73,6 +73,8 @@ import cors from 'cors'
 import { PrismaClient } from '@prisma/client'
 import authRoutes from './routers/auth.routes'
 import workspaceRoutes from './routers/workspace.routes'
+import categoryRoutes from './routers/category.routes'
+import productRoutes from './routers/product.routes'
 import dotenv from 'dotenv'
 dotenv.config()
 
@@ -100,6 +102,8 @@ app.get('/', (req, res) => {
 // Main API routes
 app.use('/api/v1/auth', authRoutes)
 app.use('/api/v1/workspaces', workspaceRoutes);
+app.use('/api/v1/categories', categoryRoutes)
+app.use('/api/v1/products', productRoutes)
 
 // 404 Handler
 app.use((req: Request, _: Response, next: NextFunction) => {

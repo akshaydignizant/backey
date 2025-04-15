@@ -370,6 +370,7 @@ export const toggleWorkspaceStatus = async (req: Request, res: Response): Promis
 export const revokeInvitation = async (req: Request, res: Response): Promise<void> => {
   try {
     const invitationId = parseInt(req.params.invitationId);
+
     if (isNaN(invitationId)) {
       res.status(400).json({ success: false, message: 'Invalid invitationId' });
       return;
@@ -379,8 +380,8 @@ export const revokeInvitation = async (req: Request, res: Response): Promise<voi
 
     res.status(200).json({ success: true, message: 'Invitation revoked successfully' });
   } catch (error: any) {
-    console.error('❌ Error revoking invitation:', error);
-    res.status(500).json({ success: false, message: 'Failed to revoke invitation' });
+    console.error('❌ Error revoking invitation:', error.message);
+    res.status(500).json({ success: false, message: error.message || 'Failed to revoke invitation' });
   }
 };
 export const getRolePermissions = async (req: Request, res: Response): Promise<void> => {
@@ -419,9 +420,35 @@ export const removeRolePermission = async (req: Request, res: Response, next: Ne
 
     res.status(200).json({ success: true, message: 'Permission removed successfully' });
   } catch (error) {
-    console.error('❌ Controller error removing permission:', error);
+    console.error('Controller error removing permission:', error);
     res.status(500).json({ success: false, message: 'Internal Server Error' });
   }
 };
 
+export const exportWorkspaceData = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const workspaceId = parseInt(req.params.workspaceId);
 
+    if (!workspaceId) {
+      res.status(400).json({ success: false, message: 'Missing workspaceId' });
+      return;
+    }
+    const userPage = parseInt(req.query.userPage as string) || 1;
+    const userPageSize = parseInt(req.query.userPageSize as string) || 10;
+    const invitationPage = parseInt(req.query.invitationPage as string) || 1;
+    const invitationPageSize = parseInt(req.query.invitationPageSize as string) || 10;
+
+    const data = await workspaceService.exportWorkspaceData(
+      workspaceId,
+      userPage,
+      userPageSize,
+      invitationPage,
+      invitationPageSize
+    );
+
+    res.status(200).json({ success: true, data });
+  } catch (error: any) {
+    console.error('❌ Error exporting workspace data:', error);
+    res.status(500).json({ success: false, message: 'Failed to export workspace data' });
+  }
+};

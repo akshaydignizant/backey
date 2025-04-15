@@ -554,15 +554,20 @@ export const workspaceService = {
   },
   revokeInvitation: async (invitationId: number) => {
     try {
-      const invitation = await prisma.invitation.findUnique({ where: { id: invitationId } });
-      if (!invitation) throw new Error('Invitation not found');
+      const invitation = await prisma.invitation.findUnique({
+        where: { id: invitationId },
+      });
+
+      if (!invitation) {
+        throw new Error('Invitation not found');
+      }
 
       await prisma.invitation.update({
         where: { id: invitationId },
-        data: { status: 'REVOKED' },
+        data: { status: InvitationStatus.REVOKED },
       });
     } catch (error) {
-      console.error('❌ Service error revoking invitation:', error);
+      console.error('Service error revoking invitation:', error);
       throw new Error('Failed to revoke invitation');
     }
   },
@@ -591,5 +596,95 @@ export const workspaceService = {
       data: { permission: updatedPermissions },
     });
   },
+  exportWorkspaceData: async (
+    workspaceId: number,
+    userPage: number = 1,
+    userPageSize: number = 10,
+    invitationPage: number = 1,
+    invitationPageSize: number = 10
+  ) => {
+    try {
+      const workspace = await prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          description: true,
+          openingTime: true,
+          closingTime: true,
+          isActive: true,
+          createdAt: true,
+          updatedAt: true,
+          // Fetch paginated users
+          users: {
+            skip: (userPage - 1) * userPageSize,
+            take: userPageSize,
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              role: true,
+              status: true,
+              phone: true,
+            },
+          },
+          // Fetch paginated invitations
+          invitations: {
+            skip: (invitationPage - 1) * invitationPageSize,
+            take: invitationPageSize,
+            select: {
+              id: true,
+              email: true,
+              status: true,
+              role: true,
+              createdAt: true,
+              acceptedAt: true,
+            },
+          },
+        },
+      });
+
+      if (!workspace) throw new Error('Workspace not found');
+
+      // Count total for pagination
+      const [userCount, invitationCount] = await Promise.all([
+        prisma.user.count({
+          where: {
+            workspaces: {
+              some: {
+                id: workspaceId,
+              },
+            },
+          },
+        }),
+        prisma.invitation.count({
+          where: {
+            workspaceId,
+          },
+        }),
+      ]);
+
+      return {
+        workspace,
+        pagination: {
+          users: {
+            page: userPage,
+            pageSize: userPageSize,
+            total: userCount,
+          },
+          invitations: {
+            page: invitationPage,
+            pageSize: invitationPageSize,
+            total: invitationCount,
+          },
+        },
+      };
+    } catch (error) {
+      console.error('❌ Service error exporting workspace data:', error);
+      throw new Error('Failed to export workspace data');
+    }
+  }
 
 };
