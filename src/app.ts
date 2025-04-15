@@ -85,7 +85,7 @@ app.use(helmet())
 app.use(
   cors({
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD'],
-    origin: ['https://client.com'], // adjust this for dev as needed
+    origin: ['http://localhost:3000'], // adjust this for dev as needed
     credentials: true,
   })
 )
