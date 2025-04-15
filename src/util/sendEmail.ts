@@ -12,7 +12,7 @@ const sendEmail = async (to: string, subject: string, html: string) => {
             service: "Gmail", // You can use "SendGrid", "Mailgun", etc.
             auth: {
                 user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASS, 
+                pass: process.env.EMAIL_PASS,
             },
         });
 
@@ -24,10 +24,10 @@ const sendEmail = async (to: string, subject: string, html: string) => {
         };
 
         const info = await transporter.sendMail(mailOptions);
-        console.log(`✅ Email sent to ${to}: ${info.messageId}`);
+        console.log(`Email sent to ${to}: ${info.messageId}`);
         return info;
     } catch (error) {
-        console.error("❌ Error sending email:", error);
+        console.error("Error sending email:", error);
         throw new Error("Failed to send email");
     }
 };

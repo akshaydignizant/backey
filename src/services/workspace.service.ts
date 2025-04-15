@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import slugify from "slugify";
 import bcrypt from 'bcryptjs';
 import { SearchParams } from "../types/types";
+import sendEmail from "../util/sendEmail";
 
 export const workspaceService = {
   createWorkspace: async (userId: string, data: WorkspaceInput) => {
@@ -231,26 +232,72 @@ export const workspaceService = {
     return `User ${email} has been removed from the workspace`;
   }
   ,
-  inviteUserToWorkspace: async (data: { email: string, role: Role, workspaceId: number }, invitedById: string) => {
-    const tempPassword = uuidv4().slice(0, 8);
-    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+  // const { email, role, workspaceId } = data;
+  // const inviteToken = uuidv4();
+  // const tempPassword = uuidv4().slice(0, 8);
+  // const hashedPassword = await bcrypt.hash(tempPassword, 10);
+  inviteUserToWorkspace: async (
+    data: { email: string; role: Role; workspaceId: number },
+    invitedById: string
+  ) => {
     const inviteToken = uuidv4();
+    const tempPassword = uuidv4().slice(0, 8);
 
-    const existingInvite = await prisma.invitation.findFirst({
-      where: { email: data.email }
-    });
+    // Fetch data in parallel
+    const [existingInvite, existingUser, workspaceWithUser] = await Promise.all([
+      prisma.invitation.findFirst({
+        where: {
+          email: data.email,
+          workspaceId: data.workspaceId,
+          status: InvitationStatus.ACCEPTED,
+        },
+        select: {
+          id: true,
+        },
+      }),
+      prisma.user.findUnique({
+        where: {
+          email: data.email,
+        },
+        select: {
+          id: true,
+          firstName: true,
+        },
+      }),
+      prisma.workspace.findUnique({
+        where: {
+          id: data.workspaceId,
+        },
+        select: {
+          name: true,
+          users: {
+            where: {
+              email: data.email,
+            },
+            select: {
+              id: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+
+    if (!workspaceWithUser) throw new Error('Workspace not found');
 
     if (existingInvite) {
-      throw new Error('Invitation already sent to this email');
+      throw new Error('Invitation already sent to this email for this workspace');
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { email: data.email } });
+    if (workspaceWithUser.users?.length > 0) {
+      throw new Error('User has already accepted invitation and is in the workspace');
+    }
 
-    let invitedUserId: string | null = null;
+    let invitedUserId = existingUser?.id;
+    let firstName = existingUser?.firstName ?? 'User';
 
-    if (existingUser) {
-      invitedUserId = existingUser.id;
-    } else {
+    if (!existingUser) {
+      const hashedPassword = await bcrypt.hash(tempPassword, 10);
       const newUser = await prisma.user.create({
         data: {
           email: data.email,
@@ -260,49 +307,103 @@ export const workspaceService = {
           firstName: 'Invited',
           lastName: 'User',
         },
+        select: { id: true, firstName: true },
       });
+
       invitedUserId = newUser.id;
+      firstName = newUser.firstName;
     }
 
-    if (invitedUserId) {
-      return prisma.invitation.create({
-        data: {
-          email: data.email,
-          tempPassword,
-          inviteToken,
-          status: InvitationStatus.PENDING,
-          role: data.role,
-          workspaceId: data.workspaceId,
-          invitedById,
-          invitedUserId,
-          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        },
-      });
-    } else {
-      throw new Error("Failed to find invited user or userId is null");
-    }
-  },
-
-  acceptInvitation: async (token: string) => {
-    const invitation = await prisma.invitation.findUnique({ where: { inviteToken: token } });
-
-    if (!invitation || invitation.status !== InvitationStatus.PENDING) {
-      throw new Error('Invalid or expired invitation');
-    }
-
-    await prisma.invitation.update({
-      where: { inviteToken: token },
-      data: { status: InvitationStatus.ACCEPTED },
-    });
-
-    const workspace = await prisma.workspace.update({
-      where: { id: invitation.workspaceId },
+    const invitation = await prisma.invitation.create({
       data: {
-        users: {
-          connect: { id: invitation.invitedUserId ?? undefined },
-        },
+        email: data.email,
+        tempPassword,
+        inviteToken,
+        status: InvitationStatus.PENDING,
+        role: data.role,
+        workspaceId: data.workspaceId,
+        invitedById,
+        invitedUserId,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
       },
     });
+    // Email content
+    const emailHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head><meta charset="UTF-8" /></head>
+        <body style="font-family: Arial, sans-serif; background: #f6f6f6; padding: 20px;">
+          <div style="max-width: 600px; margin: auto; background: white; padding: 30px; border-radius: 10px;">
+            <h2 style="color: #333;">👋 You're Invited!</h2>
+            <p>Hi <strong>${firstName}</strong>,</p>
+            <p>You’ve been invited to join the workspace <strong>${workspaceWithUser.name}</strong> as a <strong>${data.role}</strong>.</p>
+            <p>Your temporary password is:</p>
+            <p style="font-size: 18px; background: #f0f0f0; padding: 10px; display: inline-block; border-radius: 5px;">
+              ${tempPassword}
+            </p>
+            <p>Please login and update your password.</p>
+            <a href="${process.env.SERVER_URL}/api/v1/workspaces/invitation/accept/${inviteToken}" 
+              style="display: inline-block; margin-top: 20px; padding: 12px 24px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 6px;">
+              Accept Invitation
+            </a>
+            <p style="margin-top: 40px; font-size: 12px; color: #999;">Backey Management &copy; ${new Date().getFullYear()}</p>
+          </div>
+        </body>
+      </html>
+    `;
+
+    await sendEmail(
+      data.email,
+      `You're invited to join ${workspaceWithUser.name}`,
+      emailHtml
+    );
+
+    return invitation;
+  },
+
+  acceptInvitation: async (inviteToken: string) => {
+    const invitation = await prisma.invitation.findUnique({
+      where: { inviteToken },
+      select: {
+        id: true,
+        status: true,
+        expiresAt: true,
+        invitedUserId: true,
+        workspaceId: true,
+      },
+    });
+
+    if (!invitation) {
+      throw new Error('Invitation not found');
+    }
+
+    if (invitation.status !== InvitationStatus.PENDING) {
+      throw new Error('Invitation already accepted or expired');
+    }
+
+    if (invitation.expiresAt < new Date()) {
+      throw new Error('Invitation has expired');
+    }
+
+    if (!invitation.invitedUserId) {
+      throw new Error('Invited user ID is missing');
+    }
+
+    // Accept the invitation and add the user to workspace
+    const [_, workspace] = await Promise.all([
+      prisma.invitation.update({
+        where: { inviteToken },
+        data: { status: InvitationStatus.ACCEPTED },
+      }),
+      prisma.workspace.update({
+        where: { id: invitation.workspaceId },
+        data: {
+          users: {
+            connect: { id: invitation.invitedUserId },
+          },
+        },
+      }),
+    ]);
 
     return workspace;
   },
@@ -381,7 +482,20 @@ export const workspaceService = {
   getWorkspaceUsers: async (workspaceId: number, userId: string) => {
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
-      include: { users: true },
+      include: {
+        users: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            role: true,
+            status: true,
+            isActive: true,
+            profileImageUrl: true,
+          },
+        },
+      },
     });
 
     if (!workspace || workspace.ownerId !== userId) {
@@ -389,6 +503,31 @@ export const workspaceService = {
     }
 
     return workspace.users;
+  },
+
+  getWorkspacesByUserId: async (userId: string) => {
+    try {
+      return await prisma.workspace.findMany({
+        where: {
+          users: {
+            some: {
+              id: userId,
+            },
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          description: true,
+          isActive: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+    } catch (error) {
+      throw new Error('Failed to fetch user workspaces');
+    }
   },
   toggleWorkspaceStatus: async (workspaceId: number): Promise<boolean> => {
     try {

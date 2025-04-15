@@ -58,9 +58,9 @@ redisClient.on("error", (error) => console.error("❌ Redis Error:", error));
 (async () => {
   try {
     await redisClient.connect();
-    console.log("✅ Connected to Redis Cloud");
+    console.log("Connected to Redis Cloud");
   } catch (error) {
-    console.error("❌ Redis Connection Failed:", error);
+    console.error("Redis Connection Failed:", error);
   }
 })();
 

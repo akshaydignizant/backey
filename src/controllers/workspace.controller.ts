@@ -57,6 +57,31 @@ export const getWorkspace = async (req: Request, res: Response, next: NextFuncti
   }
 };
 
+export const getWorkspacesByUserId = async (req: Request, res: Response): Promise<void> => {
+  const { userId } = req.params;
+
+  if (!userId || typeof userId !== 'string') {
+    res.status(400).json({ success: false, message: 'Invalid or missing userId' });
+    return;
+  }
+
+  try {
+    const workspaces = await workspaceService.getWorkspacesByUserId(userId);
+
+    if (!workspaces || workspaces.length === 0) {
+      res.status(404).json({ success: false, message: 'No workspaces found for this user' });
+      return;
+    }
+
+    res.status(200).json({ success: true, data: workspaces });
+  } catch (error: any) {
+    console.error(`Workspace fetch error for user ${userId}:`, error.message);
+    res.status(500).json({ success: false, message: 'Something went wrong while fetching workspaces' });
+  }
+};
+
+
+
 // Update Workspace
 export const updateWorkspace = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -141,59 +166,42 @@ export const inviteUserToWorkspace = async (
 ): Promise<void> => {
   try {
     const workspaceId = parseInt(req.params.workspaceId);
-    if (isNaN(workspaceId)) {
-      res.status(400).json({ success: false, message: 'Invalid workspaceId' });
-    }
-
     const { email, role } = req.body;
     const userId = req.user?.userId;
 
-    // Validate incoming data
-    if (!userId || !email || !role) {
+    if (!workspaceId || !email || !role || !userId) {
       res.status(400).json({ success: false, message: 'Missing required fields' });
+      return;
     }
 
-    // Normalize the role to uppercase to ensure it's valid
     const normalizedRole = role.toUpperCase() as Role;
-
-    // Check if the role is valid
     if (!Object.values(Role).includes(normalizedRole)) {
-      res.status(400).json({ success: false, message: 'Invalid role provided' });
+      res.status(400).json({ success: false, message: 'Invalid role' });
+      return;
     }
 
-    // Call the service method to invite the user
     const invitation = await workspaceService.inviteUserToWorkspace(
       { email, role: normalizedRole, workspaceId },
-      userId as string
+      userId
     );
 
-    // Generate a temporary password for the user
-    const tempPassword = invitation.tempPassword;
-
-    // Create email content (you can use HTML to make the email look better)
-    const emailSubject = 'You are invited to join a workspace';
-    const emailBody = `
-      <p>Hello,</p>
-      <p>You have been invited to join a workspace. Your temporary password is:</p>
-      <p><strong>${tempPassword}</strong></p>
-      <p>Please use this temporary password to log in and update your password.</p>
-      <p>Best regards,<br>Backey Management</p>
-    `;
-
-    // Send the invitation email with the temporary password
-    await sendEmail(email, emailSubject, emailBody);
-
-    // Respond with success message and the invitation data
-    res.status(201).json({ success: true, data: invitation });
+    if (!invitation) {
+      res.status(200).json({ success: false, message: 'User is already part of the workspace' });
+      return;
+    }
+    res.status(201).json({ success: true, data: { message: "invitation sent" } });
 
   } catch (error) {
-    // Log the error for debugging purposes
-    logger.error('Error inviting user:', error);
+    logger.error('Error inviting user:', {
+      error: error instanceof Error ? error.message : error,
+      workspaceId: req.params.workspaceId,
+      invitedBy: req.user?.userId,
+      email: req.body.email,
+    });
 
-    // Respond with a generic error message
     res.status(500).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Internal server error',
+      message: error instanceof Error ? error.message : 'Internal Server Error',
     });
   }
 };
@@ -205,22 +213,29 @@ export const acceptInvite = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { invitetoken } = req.params;
+    const inviteToken = req.params.invitetoken;
 
-    if (!invitetoken) {
-      res.status(400).json({ message: 'Invitation token is required' });
+    // Validate token
+    if (!inviteToken) {
+      res.status(400).json({ success: false, message: 'Invitation token is required' });
       return;
     }
 
-    const updatedInvitation = await workspaceService.acceptInvitation(invitetoken);
+    // Call the service to accept the invitation
+    const updatedWorkspace = await workspaceService.acceptInvitation(inviteToken);
 
     res.status(200).json({
+      success: true,
       message: 'Invitation accepted successfully',
-      invitation: updatedInvitation,
+      // data: updatedWorkspace,
     });
+
   } catch (error: any) {
     logger.error('Error accepting invitation:', error);
-    res.status(404).json({ message: error.message || 'Failed to accept invitation' });
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to accept invitation',
+    });
   }
 };
 
@@ -313,20 +328,18 @@ export const assignRolePermission = async (req: Request, res: Response, next: Ne
 // Get Workspace Users
 export const getWorkspaceUsers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const workspaceId = parseInt(req.params.workspaceId);
+    const workspaceId = Number(req.params.workspaceId);
     const userId = req.user?.userId;
 
-    if (!userId) {
-      res.status(400).json({ success: false, message: 'Missing userId' });
+    if (!userId || isNaN(workspaceId)) {
+      res.status(400).json({ success: false, message: 'Invalid request parameters' });
       return;
     }
 
     const users = await workspaceService.getWorkspaceUsers(workspaceId, userId);
-
     res.status(200).json({ success: true, data: users });
   } catch (error) {
-    // logger.error('Error fetching workspace users:', error);
-    res.status(500).json({ success: false, message: error || 'Internal server error' });
+    res.status(500).json({ success: false, message: (error as Error).message || 'Internal server error' });
   }
 };
 
