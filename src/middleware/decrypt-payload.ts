@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
 import { CryptoHelper } from '../util/crypto-helper';
-import httpError from '../util/httpError';
 
 export const decryptPayload = (req: Request, res: Response, next: NextFunction): void => {
   const { iv, encryptedData } = req.body;

@@ -17,6 +17,7 @@ model User {
   phone               String?      @unique
   role                Role?        @default(ADMIN)
   status              UserStatus   @default(ACTIVE)
+  termsAccepted       Boolean      @default(false)
   phoneVerified       Boolean      @default(false)
   emailVerified       Boolean      @default(false)
   isActive            Boolean      @default(true)
