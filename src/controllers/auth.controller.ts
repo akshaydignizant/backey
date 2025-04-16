@@ -5,6 +5,7 @@ import { authService } from '../services/auth.service';
 import jwt from 'jsonwebtoken';
 import { Role } from '@prisma/client';
 import { ForgotPasswordRequest, RefreshTokenRequest, ResetPasswordRequest, SigninRequest, SignupRequest, VerifyOtpRequest } from '../types/auth';
+import { CryptoHelper } from '../util/crypto-helper';
 
 export const authController = {
   signup: async (req: Request<{}, {}, SignupRequest>, res: Response, next: NextFunction) => {
@@ -36,35 +37,66 @@ export const authController = {
         return httpResponse(req, res, 400, 'Password must be at least 6 characters long');
       }
 
-      if (typeof phone === 'string' && phone.trim() !== '' && !/^\d{10}$/.test(phone.trim())) {
+      // Phone (optional, if given)
+      const trimmedPhone = phone?.trim() || null;
+      if (trimmedPhone && !/^\d{10}$/.test(trimmedPhone)) {
         return httpResponse(req, res, 400, 'Phone number must be exactly 10 digits');
       }
 
-      // Role (optional): default to CUSTOMER if not passed
+      // Role (optional): default to ADMIN if not passed
       const roleEnum =
         role && Object.values(Role).includes(role.toUpperCase() as Role)
           ? (role.toUpperCase() as Role)
           : Role.ADMIN;
 
       const userData = await authService.signupService(
-        firstName,
-        lastName?.trim(),
+        firstName.trim(),
+        lastName?.trim() || null,
         email.toLowerCase(),
         password,
-        phone ? phone.trim() : '',
+        trimmedPhone,
         roleEnum
       );
 
-      return httpResponse(req, res, 201, 'User registered successfully', userData);
+      httpResponse(req, res, 200, 'Signup successful', userData);
     } catch (err) {
       return httpError(next, err, req);
     }
   },
-  signin: async (req: Request<{}, {}, SigninRequest>, res: Response, next: NextFunction) => {
+
+  signin: async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { email, password } = req.body;
+      const { email, password } = req.body as SigninRequest;
       const data = await authService.signInService(email, password);
-      httpResponse(req, res, 200, 'Login successful', data);
+      // Encrypting response for frontend
+      const encryptedResponse = CryptoHelper.encrypt({
+        message: 'Login successful',
+        data,
+      });
+
+      res.status(200).json({
+        success: true,
+        statusCode: 200,
+        encryptedData: encryptedResponse.encryptedData,
+        iv: encryptedResponse.iv,
+      });
+      // httpResponse(req, res, 200, 'Login successful', data);
+    } catch (err) {
+      httpError(next, err, req);
+    }
+  },
+  signintest: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { email, password } = req.body as SigninRequest;
+      // const { firstName, lastName, email, password, phone, role } = req.body;
+
+      const encrypted = CryptoHelper.encrypt({ email, password });
+
+      res.status(200).json({
+        success: true,
+        message: 'Test encryption successful',
+        encryptedPayload: encrypted,
+      });
     } catch (err) {
       httpError(next, err, req);
     }

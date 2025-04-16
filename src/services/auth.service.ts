@@ -7,16 +7,29 @@ import crypto from 'crypto';
 import { Role } from '@prisma/client';
 
 export const authService = {
-  signupService: async (firstName: string, lastName: string, email: string, password: string, phone: string, role: Role) => {
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
+  signupService: async (
+    firstName: string,
+    lastName: string | null,
+    email: string,
+    password: string,
+    phone: string | null,
+    role: Role
+  ) => {
+    // Check for existing user by email or phone
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email },
+          ...(phone ? [{ phone }] : []),
+        ],
+      },
       select: {
         id: true,
         email: true,
       },
     });
 
-    if (existingUser) throw new Error('User already exists');
+    if (existingUser) throw new Error('User with this email or phone already exists');
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -30,9 +43,6 @@ export const authService = {
         phone,
       },
     });
-
-    // const { token, refreshToken } = generateToken(newUser.id, newUser.role as Role);
-    // await redisClient.setEx(`refresh:${newUser.id}`, 60 * 60 * 24 * 7, refreshToken); // 7 days
 
     return { user: newUser };
   },

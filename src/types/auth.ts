@@ -57,11 +57,11 @@ import { Role } from '@prisma/client';
 
 export interface SignupRequest {
   firstName: string;
-  lastName: string;
+  lastName?: string;
   email: string;
   password: string;
   phone?: string;
-  role: Role;
+  role?: Role;
 }
 
 export interface SigninRequest {
