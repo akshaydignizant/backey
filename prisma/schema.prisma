@@ -32,6 +32,10 @@ model User {
   orders              Order[]
   ownedWorkspaces     Workspace[]  @relation("OwnedWorkspaces")
   workspaces          Workspace[]  @relation("UserWorkspaces")
+
+  // Index on email and phone for fast lookup
+  @@index([email])
+  @@index([phone]) // Index for phone searches, particularly useful for user verification
 }
 
 model Workspace {
@@ -53,6 +57,10 @@ model Workspace {
   rolePermissions RolePermission[]
   owner           User             @relation("OwnedWorkspaces", fields: [ownerId], references: [id])
   users           User[]           @relation("UserWorkspaces")
+
+  // Index on the ownerId for efficient lookup of workspaces owned by a user
+  @@index([ownerId])
+  @@index([slug])
 }
 
 model RolePermission {
@@ -79,6 +87,11 @@ model Product {
   category    Category         @relation(fields: [categoryId], references: [id])
   workspace   Workspace        @relation(fields: [workspaceId], references: [id])
   variants    ProductVariant[]
+
+  // Adding indexes for frequently searched fields
+  @@index([workspaceId]) // To quickly filter products by workspaceId
+  @@index([name, isActive]) // To quickly filter by name and active status
+  @@index([slug]) // Index for searching by slug
 }
 
 model ProductVariant {
@@ -97,6 +110,9 @@ model ProductVariant {
   cartItems   CartItem[]
   orderItems  OrderItem[]
   product     Product     @relation(fields: [productId], references: [id])
+
+  // Adding an index for sku field as it is unique but also might be frequently queried
+  @@index([productId]) // Index for fetching variants for a specific product
 }
 
 model Category {
@@ -112,6 +128,9 @@ model Category {
   children    Category[] @relation("CategoryHierarchy")
   workspace   Workspace  @relation(fields: [workspaceId], references: [id])
   products    Product[]
+
+  // Index on workspaceId to speed up queries filtering by workspaceId
+  @@index([workspaceId])
 }
 
 model Order {
@@ -132,6 +151,10 @@ model Order {
   user              User          @relation(fields: [userId], references: [id])
   workspace         Workspace     @relation(fields: [workspaceId], references: [id])
   items             OrderItem[]
+
+  // Indexes to optimize query filtering by workspaceId and order status
+  @@index([workspaceId])
+  @@index([status]) // Index to efficiently query by order status
 }
 
 model OrderItem {

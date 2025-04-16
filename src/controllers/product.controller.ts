@@ -1,43 +1,136 @@
 
-import { Request, Response } from 'express';
+import { NextFunction, Request, Response } from 'express';
 import { productService } from '../services/product.service';
+import httpError from '../util/httpError';
+import httpResponse from '../util/httpResponse';
 
-export const createProduct = async (req: Request, res: Response) => {
+export const createProduct = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { workspaceId } = req.params;
   try {
     const product = await productService.createProduct(Number(workspaceId), req.body);
-    res.status(201).json(product);
+    httpResponse(req, res, 201, 'Product created', product);
   } catch (err) {
-    res.status(400).json({ error: err });
+    return httpError(next, err, req, 400);
   }
 };
 
-export const getProductsInWorkspace = async (req: Request, res: Response) => {
+export const getProductsInWorkspace = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { workspaceId } = req.params;
   try {
     const products = await productService.getProductsInWorkspace(Number(workspaceId));
-    res.status(200).json(products);
+    return httpResponse(req, res, 200, 'Product fetched', products);
   } catch (err) {
-    res.status(400).json({ error: err });
+    return httpError(next, err, req);
   }
 };
 
-export const updateProduct = async (req: Request, res: Response) => {
+export const updateProduct = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { workspaceId, productId } = req.params;
   try {
     const updatedProduct = await productService.updateProduct(Number(workspaceId), productId, req.body);
-    res.status(200).json(updatedProduct);
+    httpResponse(req, res, 200, 'Product updated', updatedProduct);
   } catch (err) {
-    res.status(400).json({ error: err });
+    httpError(next, err, req, 400);
   }
 };
 
-export const deleteProduct = async (req: Request, res: Response) => {
+export const deleteProduct = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { workspaceId, productId } = req.params;
   try {
     await productService.deleteProduct(Number(workspaceId), productId);
-    res.status(204).end();
+    return httpResponse(req, res, 204, 'Product deleted');
   } catch (err) {
-    res.status(400).json({ error: err });
+    return httpError(next, err, req, 400);
+  }
+};
+
+export const getProductById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { productId } = req.params;
+    const product = await productService.getProductById(productId);
+    return httpResponse(req, res, 200, 'Product fetched', product);
+  } catch (err) {
+    return httpError(next, err, req, 400);
+  }
+};
+
+export const getProductBySlug = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { slug } = req.params;
+    const product = await productService.getProductBySlug(slug);
+    return httpResponse(req, res, 200, 'Product by slug fetched', product);
+  } catch (err) {
+    return httpError(next, err, req, 400);
+  }
+};
+
+export const toggleProductStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { productId } = req.params;
+    const product = await productService.toggleProductStatus(productId);
+    return httpResponse(req, res, 200, 'Product status toggled', product);
+  } catch (err) {
+    return httpError(next, err, req, 400);
+  }
+};
+
+export const getProductStats = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { workspaceId } = req.params;
+    const stats = await productService.getProductStats(Number(workspaceId));
+    return httpResponse(req, res, 200, 'Product stats fetched', stats);
+  } catch (err) {
+    return httpError(next, err, req, 400);
+  }
+};
+
+export const updateVariants = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { productId } = req.params;
+    const updated = await productService.updateVariants(productId, req.body.variants);
+    return httpResponse(req, res, 200, 'Variants updated', updated);
+  } catch (err) {
+    return httpError(next, err, req, 400);
+  }
+};
+
+export const bulkUploadProducts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { workspaceId } = req.params;
+    const products = await productService.bulkUploadProducts(Number(workspaceId), req.body.products);
+    return httpResponse(req, res, 201, 'Bulk products created', products);
+  } catch (err) {
+    return httpError(next, err, req, 400);
+  }
+};
+
+export const searchProducts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { workspaceId } = req.params;
+    const { q } = req.query;
+    const products = await productService.searchProducts(Number(workspaceId), String(q));
+    return httpResponse(req, res, 200, 'Products search results', products);
+  } catch (err) {
+    return httpError(next, err, req, 400);
+  }
+};
+
+export const checkSlugAvailability = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { slug, workspaceId } = req.params;
+    const isAvailable = await productService.checkSlugAvailability(slug, Number(workspaceId));
+    return httpResponse(req, res, 200, 'Slug availability checked', { isAvailable });
+  } catch (err) {
+    return httpError(next, err, req, 400);
+  }
+};
+
+export const getProductVariants = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { productId } = req.params;
+    const variants = await productService.getProductVariants(productId);
+    return httpResponse(req, res, 200, 'Product variants fetched', variants);
+  } catch (err) {
+    return httpError(next, err, req, 400);
   }
 };

@@ -11,57 +11,55 @@ export const authController = {
     try {
       const { firstName, lastName, email, password, phone, role } = req.body;
 
-      if (!firstName || !email || !password || !role) {
-        return httpResponse(req, res, 400, 'All required fields must be provided');
+      // Required fields check
+      if (!firstName || !email || !password) {
+        return httpResponse(req, res, 400, 'First name, email, and password are required');
       }
 
-      // Validate and map role to enum
-      const roleEnum = Object.values(Role).find(r => r.toLowerCase() === role.toLowerCase());
-      if (!roleEnum) {
-        return httpResponse(req, res, 400, 'Invalid role');
-      }
-
-      // Validate alphanumeric first and last name
+      // Validate first name (alphanumeric)
       if (!/^[a-zA-Z0-9]+$/.test(firstName)) {
         return httpResponse(req, res, 400, 'First name must be alphanumeric');
       }
 
-      if (!/^[a-zA-Z0-9]+$/.test(lastName)) {
+      // Optional last name check (if provided)
+      if (lastName && !/^[a-zA-Z0-9]+$/.test(lastName)) {
         return httpResponse(req, res, 400, 'Last name must be alphanumeric');
       }
 
-      // Validate email format
+      // Email format
       if (!/^[\w.-]+@[a-zA-Z\d.-]+\.[a-zA-Z]{2,}$/.test(email)) {
         return httpResponse(req, res, 400, 'Invalid email format');
       }
 
-      // Validate password length
+      // Password strength
       if (password.length < 6) {
         return httpResponse(req, res, 400, 'Password must be at least 6 characters long');
       }
 
-      // Validate phone number (if provided)
-      if (phone && !/^\d{10}$/.test(phone) || phone == null) {
-        return httpResponse(req, res, 400, 'Phone number must be 10 digits');
+      if (typeof phone === 'string' && phone.trim() !== '' && !/^\d{10}$/.test(phone.trim())) {
+        return httpResponse(req, res, 400, 'Phone number must be exactly 10 digits');
       }
 
-      // Call signup service with valid role
-      const data = await authService.signupService(
+      // Role (optional): default to CUSTOMER if not passed
+      const roleEnum =
+        role && Object.values(Role).includes(role.toUpperCase() as Role)
+          ? (role.toUpperCase() as Role)
+          : Role.ADMIN;
+
+      const userData = await authService.signupService(
         firstName,
-        lastName,
+        lastName?.trim(),
         email.toLowerCase(),
         password,
-        phone,
-        roleEnum // Use the properly mapped role
+        phone ? phone.trim() : '',
+        roleEnum
       );
 
-      return httpResponse(req, res, 201, 'User registered successfully', data);
-
+      return httpResponse(req, res, 201, 'User registered successfully', userData);
     } catch (err) {
       return httpError(next, err, req);
     }
   },
-
   signin: async (req: Request<{}, {}, SigninRequest>, res: Response, next: NextFunction) => {
     try {
       const { email, password } = req.body;
