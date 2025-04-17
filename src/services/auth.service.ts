@@ -44,8 +44,27 @@ export const authService = {
       },
     });
 
-    return { user: newUser };
+    // Generate tokens
+    const { token, refreshToken } = generateToken(newUser.id, newUser.role as Role);
+
+    // Store tokens in Redis
+    await Promise.all([
+      redisClient.setEx(`auth:${newUser.id}`, RedisTTL.ACCESS_TOKEN, token),
+      redisClient.setEx(`refresh:${newUser.id}`, RedisTTL.REFRESH_TOKEN, refreshToken),
+    ]);
+
+    // Return tokens and user info
+    return {
+      token,
+      refreshToken,
+      user: {
+        id: newUser.id,
+        email: newUser.email,
+        role: newUser.role,
+      },
+    };
   },
+
 
   signInService: async (email: string, password: string) => {
     const user = await prisma.user.findUnique({

@@ -8,9 +8,9 @@ import { ForgotPasswordRequest, RefreshTokenRequest, ResetPasswordRequest, Signi
 import { CryptoHelper } from '../util/crypto-helper';
 
 export const authController = {
-  signup: async (req: Request<{}, {}, SignupRequest>, res: Response, next: NextFunction) => {
+  signup: async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { firstName, lastName, email, password, phone, role } = req.body;
+      const { firstName, lastName, email, password, phone, role } = req.body as SignupRequest;
 
       // Required fields check
       if (!firstName || !email || !password) {
@@ -39,8 +39,8 @@ export const authController = {
 
       // Phone (optional, if given)
       const trimmedPhone = phone?.trim() || null;
-      if (trimmedPhone && !/^\d{10}$/.test(trimmedPhone)) {
-        return httpResponse(req, res, 400, 'Phone number must be exactly 10 digits');
+      if (trimmedPhone) {
+        return httpResponse(req, res, 400, 'Enter valid phone digits');
       }
 
       // Role (optional): default to ADMIN if not passed
@@ -57,8 +57,19 @@ export const authController = {
         trimmedPhone,
         roleEnum
       );
+      // Encrypting response for frontend
+      const encryptedResponse = CryptoHelper.encrypt({
+        message: 'Signup successful',
+        userData,
+      });
 
-      httpResponse(req, res, 200, 'Signup successful', userData);
+      res.status(200).json({
+        success: true,
+        statusCode: 200,
+        encryptedData: encryptedResponse.encryptedData,
+        iv: encryptedResponse.iv,
+      });
+      // httpResponse(req, res, 200, 'Signup successful', userData);
     } catch (err) {
       return httpError(next, err, req);
     }
@@ -80,7 +91,7 @@ export const authController = {
         encryptedData: encryptedResponse.encryptedData,
         iv: encryptedResponse.iv,
       });
-      // httpResponse(req, res, 200, 'Login successful', data);
+      httpResponse(req, res, 200, 'Login successful', data);
     } catch (err) {
       httpError(next, err, req);
     }
@@ -102,11 +113,15 @@ export const authController = {
     }
   },
 
-  refreshToken: async (req: Request<{}, {}, RefreshTokenRequest>, res: Response, next: NextFunction) => {
+  refreshToken: async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { refreshToken } = req.body;
-      const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET!) as jwt.JwtPayload;
-      const data = await authService.refreshToken(decoded.userId, refreshToken, decoded.role as string);
+      const { refreshToken } = req.body as RefreshTokenRequest;
+      interface RefreshTokenPayload extends jwt.JwtPayload {
+        userId: string;
+        role: string;
+      }
+      const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET!) as RefreshTokenPayload;
+      const data = await authService.refreshToken(decoded.userId, refreshToken, decoded.role);
       httpResponse(req, res, 200, 'Token refreshed', data);
     } catch (err) {
       httpError(next, err, req, 403);
@@ -125,9 +140,9 @@ export const authController = {
     }
   },
 
-  forgotPassword: async (req: Request<{}, {}, ForgotPasswordRequest>, res: Response, next: NextFunction) => {
+  forgotPassword: async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { email } = req.body;
+      const { email } = req.body as ForgotPasswordRequest;
       if (!email) return httpResponse(req, res, 400, 'Email is required');
 
       await authService.forgotPasswordService(email);
@@ -136,9 +151,9 @@ export const authController = {
       httpError(next, err, req, 500);
     }
   },
-  verifyOtp: async (req: Request<{}, {}, VerifyOtpRequest>, res: Response, next: NextFunction) => {
+  verifyOtp: async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { otp } = req.body;
+      const { otp } = req.body as VerifyOtpRequest;
       if (!otp) return httpResponse(req, res, 400, 'OTP is required');
 
       const resetToken = await authService.verifyOtpService(otp);
@@ -148,9 +163,9 @@ export const authController = {
     }
   },
 
-  resetPassword: async (req: Request<{}, {}, ResetPasswordRequest>, res: Response, next: NextFunction) => {
+  resetPassword: async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { resetToken, newPassword } = req.body;
+      const { resetToken, newPassword } = req.body as ResetPasswordRequest;
       if (!resetToken || !newPassword)
         return httpResponse(req, res, 400, 'Reset token and new password are required');
 

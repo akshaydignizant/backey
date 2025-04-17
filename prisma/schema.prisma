@@ -25,7 +25,8 @@ model User {
   lastLogin           DateTime?
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
-  addresses           Address[]
+  locationId          String?
+  location            Location?    @relation("UserLocation", fields: [locationId], references: [id])
   bills               Bill[]
   cart                CartItem[]
   invitationsSent     Invitation[] @relation("InvitedBy")
@@ -33,10 +34,12 @@ model User {
   orders              Order[]
   ownedWorkspaces     Workspace[]  @relation("OwnedWorkspaces")
   workspaces          Workspace[]  @relation("UserWorkspaces")
+  Address             Address[]
 
   // Index on email and phone for fast lookup
   @@index([email])
-  @@index([phone]) // Index for phone searches, particularly useful for user verification
+  @@index([phone])
+  @@index([locationId])
 }
 
 model Workspace {
@@ -51,6 +54,8 @@ model Workspace {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   ownerId         String
+  locationId      String?
+  location        Location?        @relation("WorkspaceLocation", fields: [locationId], references: [id])
   categories      Category[]
   invitations     Invitation[]
   orders          Order[]
@@ -62,6 +67,7 @@ model Workspace {
   // Index on the ownerId for efficient lookup of workspaces owned by a user
   @@index([ownerId])
   @@index([slug])
+  @@index([locationId])
 }
 
 model RolePermission {
@@ -72,6 +78,27 @@ model RolePermission {
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
 
   @@unique([workspaceId, role])
+}
+
+model Location {
+  id         String   @id @default(uuid())
+  name       String
+  address    String
+  street     String?
+  city       String
+  region     String
+  postalCode String
+  country    String
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  users      User[]      @relation("UserLocation")
+  workspaces Workspace[] @relation("WorkspaceLocation")
+
+  @@index([city, region])
+  @@index([postalCode])
+  @@index([name])
 }
 
 model Product {
