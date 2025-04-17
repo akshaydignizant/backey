@@ -11,8 +11,8 @@ import httpResponse from '../util/httpResponse';
 export const createWorkspace = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    const { name, description, images, openingTime, closingTime, isActive } = req.body;
-
+    const { name, description, openingTime, closingTime, isActive } = req.body;
+    const images = req.file ? req.file.path : null;
     if (!name) {
       return httpResponse(req, res, 400, 'Workspace name is required');
     }
@@ -20,7 +20,7 @@ export const createWorkspace = async (req: Request, res: Response, next: NextFun
     const workspace = await workspaceService.createWorkspace(userId as string, {
       name,
       description,
-      images,
+      images: images ? [images] : undefined,
       openingTime,
       closingTime,
       isActive,
@@ -34,10 +34,9 @@ export const createWorkspace = async (req: Request, res: Response, next: NextFun
 };
 
 // Get Workspace
-export const getWorkspace = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const searchWorkspaces = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { search, page = '1', limit = '10' } = req.query;
-    const userId = req.user?.userId;
     const pageNumber = parseInt(page as string);
     const limitNumber = parseInt(limit as string);
 
@@ -50,7 +49,7 @@ export const getWorkspace = async (req: Request, res: Response, next: NextFuncti
       page: pageNumber,
       limit: limitNumber,
     });
-    return httpResponse(req, res, 200, 'Workspaces fetched successfully', results.data);
+    httpResponse(req, res, 200, 'Workspaces fetched successfully', results.data);
   } catch (error) {
     logger.error('Error fetching workspace:', error);
     return httpError(next, error, req);
@@ -92,7 +91,8 @@ export const updateWorkspace = async (req: Request, res: Response, next: NextFun
       name,
       description,
       isActive,
-    });
+    },
+    );
     httpResponse(req, res, 200, 'Workspace updated successfully', workspace);
   } catch (error) {
     logger.error('Error updating workspace:', error);
@@ -130,8 +130,11 @@ export const deleteWorkspace = async (req: Request, res: Response, next: NextFun
   try {
     const workspaceId = parseInt(req.params.workspaceId);
     const userId = req.user?.userId;
+    if (!userId) {
+      return httpError(next, new Error('Unauthorized: missing user ID'), req);
+    }
     await workspaceService.deleteWorkspace(workspaceId, userId as string);
-    httpResponse(req, res, 204, 'Workspace deleted successfully');
+    return httpResponse(req, res, 204, 'Workspace deleted successfully');
   } catch (error) {
     logger.error('Error deleting workspace:', error);
     return httpError(next, error, req);
@@ -164,45 +167,29 @@ export const inviteUserToWorkspace = async (
   res: Response,
   next: NextFunction
 ): Promise<void> => {
+  const workspaceId = Number(req.params.workspaceId);
+  const { email, role } = req.body;
+  const { userId } = req.user || {};
+
+  if (!userId || !workspaceId || !email || !role) {
+    return httpResponse(req, res, 400, 'Missing required fields');
+  }
+
+  const normalizedRole = role.toUpperCase() as Role;
+  if (!Object.values(Role).includes(normalizedRole)) {
+    return httpResponse(req, res, 400, 'Invalid role');
+  }
+
   try {
-    const workspaceId = parseInt(req.params.workspaceId);
-    const { email, role } = req.body;
-    const userId = req.user?.userId;
-
-    if (!workspaceId || !email || !role || !userId) {
-      res.status(400).json({ success: false, message: 'Missing required fields' });
-      return;
-    }
-
-    const normalizedRole = role.toUpperCase() as Role;
-    if (!Object.values(Role).includes(normalizedRole)) {
-      res.status(400).json({ success: false, message: 'Invalid role' });
-      return;
-    }
-
     const invitation = await workspaceService.inviteUserToWorkspace(
       { email, role: normalizedRole, workspaceId },
       userId
     );
-
-    if (!invitation) {
-      res.status(200).json({ success: false, message: 'User is already part of the workspace' });
-      return;
-    }
-    res.status(201).json({ success: true, data: { message: "invitation sent" } });
-
+    return invitation
+      ? httpResponse(req, res, 201, 'Invitation sent', { invitation })
+      : httpResponse(req, res, 200, 'User is already part of the workspace');
   } catch (error) {
-    logger.error('Error inviting user:', {
-      error: error instanceof Error ? error.message : error,
-      workspaceId: req.params.workspaceId,
-      invitedBy: req.user?.userId,
-      email: req.body.email,
-    });
-
-    res.status(500).json({
-      success: false,
-      message: error instanceof Error ? error.message : 'Internal Server Error',
-    });
+    return httpError(next, error, req);
   }
 };
 
@@ -212,30 +199,17 @@ export const acceptInvite = async (
   res: Response,
   next: NextFunction
 ): Promise<void> => {
+  const { invitetoken: inviteToken } = req.params;
+
+  if (!inviteToken) {
+    return httpResponse(req, res, 400, 'Invitation token is required');
+  }
+
   try {
-    const inviteToken = req.params.invitetoken;
-
-    // Validate token
-    if (!inviteToken) {
-      res.status(400).json({ success: false, message: 'Invitation token is required' });
-      return;
-    }
-
-    // Call the service to accept the invitation
-    const updatedWorkspace = await workspaceService.acceptInvitation(inviteToken);
-
-    res.status(200).json({
-      success: true,
-      message: 'Invitation accepted successfully',
-      // data: updatedWorkspace,
-    });
-
-  } catch (error: any) {
-    logger.error('Error accepting invitation:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to accept invitation',
-    });
+    await workspaceService.acceptInvitation(inviteToken);
+    return httpResponse(req, res, 200, 'Invitation accepted successfully');
+  } catch (error) {
+    return httpError(next, error, req);
   }
 };
 
@@ -286,41 +260,26 @@ export const setRolePermission = async (
 };
 
 export const assignRolePermission = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const workspaceId = parseInt(req.params.workspaceId);
-
-    if (isNaN(workspaceId)) {
-      res.status(400).json({ success: false, message: 'Invalid workspaceId' });
-      return;
-    }
-
+  {
+    const workspaceId = Number(req.params.workspaceId);
     const { role, permissions } = req.body;
+    const { userId } = req.user || {};
 
-    if (!role || !Array.isArray(permissions) || permissions.length === 0) {
-      res.status(400).json({
-        success: false,
-        message: 'Role and permissions are required and must be valid',
-      });
-      return;
+    if (isNaN(workspaceId) || !userId || !role || !Array.isArray(permissions) || !permissions.length) {
+      return httpResponse(req, res, 400, 'Invalid workspace ID, user ID, role, or permissions');
     }
 
     const upperRole = role.toUpperCase() as Role;
-
-    // Loop over the permissions array and assign each one
-    for (const permission of permissions) {
-      await workspaceService.setRolesPermissionService(workspaceId, upperRole, permission, req.user?.userId as string);
+    if (!Object.values(Role).includes(upperRole)) {
+      return httpResponse(req, res, 400, 'Invalid role');
     }
 
-    res.status(200).json({
-      success: true,
-      message: 'Permissions assigned to role successfully',
-    });
-  } catch (error) {
-    console.error('❌ Error assigning role permission:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error',
-    });
+    try {
+      await workspaceService.setRolesPermissionService(workspaceId, upperRole, permissions, userId);
+      return httpResponse(req, res, 200, 'Permissions assigned to role successfully');
+    } catch (error) {
+      return httpError(next, error, req);
+    }
   }
 };
 
@@ -407,21 +366,24 @@ export const getRolePermissions = async (req: Request, res: Response): Promise<v
   }
 };
 export const removeRolePermission = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const workspaceId = Number(req.params.workspaceId);
+  const role = req.params.role?.toUpperCase() as Role;
+  const { permission } = req.body;
+  const { userId } = req.user || {};
+
+  if (isNaN(workspaceId) || !role || !permission || !userId) {
+    return httpResponse(req, res, 400, 'Invalid workspace ID, role, permission, or user ID');
+  }
+
+  if (!Object.values(Role).includes(role)) {
+    return httpResponse(req, res, 400, 'Invalid role');
+  }
+
   try {
-    const workspaceId = parseInt(req.params.workspaceId);
-    const role = req.params.role.toUpperCase() as Role;
-    const { permission } = req.body;
-
-    if (!workspaceId || !role || !permission) {
-      res.status(400).json({ success: false, message: 'Missing fields' });
-    }
-
-    await workspaceService.removeRolePermission(workspaceId, role, permission);
-
-    res.status(200).json({ success: true, message: 'Permission removed successfully' });
+    await workspaceService.removeRolePermission(workspaceId, role, permission, userId as string);
+    return httpResponse(req, res, 200, 'Permission removed successfully');
   } catch (error) {
-    console.error('Controller error removing permission:', error);
-    res.status(500).json({ success: false, message: 'Internal Server Error' });
+    return httpError(next, error, req);
   }
 };
 

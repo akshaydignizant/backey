@@ -87,33 +87,40 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
 
         try {
             decoded = jwt.verify(token, process.env.JWT_SECRET!) as TokenPayload;
+            console.log(`Token verified for user ${decoded.userId}, expires at: ${new Date((decoded.exp ?? 0) * 1000).toISOString()}`);
         } catch (error) {
             if (error instanceof TokenExpiredError) {
+                console.log(`Token expired for user ${decoded?.userId || 'unknown'}: ${error.message}`);
                 return httpResponse(req, res, 401, 'Token has expired. Please log in again.');
             }
             if (error instanceof JsonWebTokenError) {
+                console.log(`Invalid token: ${error.message}`);
                 return httpResponse(req, res, 401, 'Invalid token.');
             }
             return httpError(next, error, req, 401);
         }
 
         if (!decoded?.userId) {
+            console.log('Invalid token payload: missing userId');
             return httpResponse(req, res, 401, 'Invalid token payload.');
         }
 
         // Validate role
         if (decoded.role && !['ADMIN', 'MANAGER', 'STAFF', 'CUSTOMER'].includes(decoded.role)) {
+            console.log(`Invalid role in token: ${decoded.role}`);
             return httpResponse(req, res, 401, 'Invalid role in token.');
         }
 
         // Fetch token from Redis
         const redisToken = await redisClient.get(`auth:${decoded.userId}`);
         if (!redisToken) {
+            console.log(`Redis key auth:${decoded.userId} not found or expired`);
             return httpResponse(req, res, 401, 'Session expired. Please log in again.');
         }
 
         if (redisToken !== token) {
-            return httpResponse(req, res, 401, 'Invalid or mismatched token.');
+            console.log(`Redis token mismatch for user ${decoded.userId}`);
+            return httpResponse(req, res, 401, 'TOKEN_EXPIRED');
         }
 
         // Attach userId and role to the request
@@ -124,6 +131,7 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
 
         next();
     } catch (error) {
+        console.error('Auth middleware error:', error);
         return httpError(next, error, req, 401);
     }
 };

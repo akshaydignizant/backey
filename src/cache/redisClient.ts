@@ -38,10 +38,10 @@ dotenv.config();
 const redisURL = process.env.REDIS_URL;
 
 export const RedisTTL = {
-  ACCESS_TOKEN: 3600,
-  REFRESH_TOKEN: 60 * 60 * 24 * 7,
-  OTP: 300,
-  RESET: 300,
+  ACCESS_TOKEN: 60 * 60,            // 1 hour
+  REFRESH_TOKEN: 60 * 60 * 24 * 7,  // 7 days
+  OTP: 60 * 5,                      // 5 minutes
+  RESET: 60 * 5,                    // 5 minutes
 };
 
 

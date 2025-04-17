@@ -91,7 +91,7 @@ export const authController = {
         encryptedData: encryptedResponse.encryptedData,
         iv: encryptedResponse.iv,
       });
-      httpResponse(req, res, 200, 'Login successful', data);
+      // httpResponse(req, res, 200, 'Login successful', data);
     } catch (err) {
       httpError(next, err, req);
     }
@@ -178,8 +178,12 @@ export const authController = {
 
   UpdateProfile: async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.user?.id;
-      if (!userId)
+      const id = req.user?.userId;
+      const userId = req.params.id;
+      if (!userId) {
+        return httpResponse(req, res, 403, 'Profile not found');
+      }
+      if (!id)
         return httpResponse(req, res, 401, 'Unauthorized');
 
       const updatedUser = await authService.updateUserProfileService(userId, req.body);
@@ -188,43 +192,21 @@ export const authController = {
       return httpError(next, error, req, 500);
     }
   },
-  // adminUpdateUserProfile: async (
-  //   req: Request,
-  //   res: Response,
-  //   next: NextFunction
-  // ): Promise<void> => {
-  //   try {
-  //     const requester = req.user; // Assumes authentication middleware adds req.user
-  //     const workspaceId = req.params.workspaceId;
-  //     const userIdToUpdate = req.params.userId;
+  adminUpdateUserProfile: async (req: Request, res: Response) => {
+    const userId = req.params.id;
+    const updates = req.body;
 
-  //     if (!requester || requester.role !== 'ADMIN') {
-  //       return httpResponse(req, res, 403, 'Access denied. Not an admin.');
-  //     }
+    try {
+      const updatedUser = await authService.adminUpdateUserProfileService(userId, updates);
 
-  //     const { email, fullName, phoneNumber, role, designation } = req.body;
-
-  //     // Optional: Validate allowed roles
-  //     if (role && !['MANAGER', 'STAFF'].includes(role)) {
-  //       return httpResponse(req, res, 400, 'Invalid role. Only MANAGER or STAFF allowed.');
-  //     }
-
-  //     const updatedUser = await authService.adminUpdateUserProfileService(
-  //       workspaceId,
-  //       userIdToUpdate,
-  //       {
-  //         email,
-  //         fullName,
-  //         phoneNumber,
-  //         role: role as Role,
-  //         designation,
-  //       }
-  //     );
-
-  //     return httpResponse(req, res, 200, 'User updated successfully', updatedUser);
-  //   } catch (err: any) {
-  //     return httpError(next, err, req, 400);
-  //   }
-  // },
-
+      return res.status(200).json({
+        message: 'User updated successfully',
+        data: updatedUser,
+      });
+    } catch (err: any) {
+      return res.status(400).json({
+        message: err.message,
+      });
+    }
+  },
 }

@@ -4,7 +4,7 @@ import redisClient, { RedisTTL } from '../cache/redisClient';
 import { generateToken } from '../util/generateToken';
 import sendEmail from '../util/sendEmail';
 import crypto from 'crypto';
-import { Role } from '@prisma/client';
+import { Role, UserStatus } from '@prisma/client';
 
 export const authService = {
   signupService: async (
@@ -216,9 +216,10 @@ export const authService = {
       firstName,
       lastName,
       phone,
+      role,
+      status,
       profileImageUrl,
-      email,
-      locationId
+      email
     } = data;
 
     const updatedUser = await prisma.user.update({
@@ -229,7 +230,8 @@ export const authService = {
         phone,
         profileImageUrl,
         email,
-        locationId,
+        role,
+        status,
         updatedAt: new Date()
       },
       select: {
@@ -238,6 +240,8 @@ export const authService = {
         lastName: true,
         email: true,
         phone: true,
+        role: true,
+        status: true,
         profileImageUrl: true,
         locationId: true,
         updatedAt: true
@@ -246,39 +250,34 @@ export const authService = {
 
     return updatedUser;
   },
-  // adminUpdateUserProfileService: async (
-  //   workspaceId: string,
-  //   targetUserId: string,
-  //   updateData: {
-  //     email?: string;
-  //     fullName?: string;
-  //     phoneNumber?: string;
-  //     role?: Role;
-  //     designation?: string;
-  //   }
-  // ) => {
-  //   const user = await prisma.user.findUnique({
-  //     where: { id: targetUserId },
-  //     select: { id: true, role: true },
-  //   });
+  adminUpdateUserProfileService: async (
+    userId: string,
+    updates: Partial<{
+      firstName: string;
+      lastName: string;
+      email: string;
+      phone: string;
+      role: Role;
+      status: UserStatus;
+      isActive: boolean;
+      profileImageUrl: string;
+      locationId: string;
+    }>
+  ) => {
+    const existingUser = await prisma.user.findUnique({
+      where: { id: userId },
+    });
 
-  //   if (!user) {
-  //     throw new Error('User not found');
-  //   }
+    if (!existingUser) {
+      throw new Error('User not found');
+    }
 
-  //   // Ensure the user belongs to the same workspace and is not an ADMIN
-  //   if (user. !== workspaceId || !['MANAGER', 'STAFF'].includes(user.role)) {
-  //     throw new Error('Unauthorized to update this user');
-  //   }
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: updates,
+    });
 
-  //   const updatedUser = await prisma.user.update({
-  //     where: { id: targetUserId },
-  //     data: {
-  //       ...updateData,
-  //     },
-  //   });
-
-  //   return updatedUser;
-  // },
+    return updatedUser;
+  }
 
 };

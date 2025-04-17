@@ -1,66 +1,50 @@
 import { InvitationStatus, Prisma, Role } from "@prisma/client";
-import { WorkspaceInput } from "../types/workspace.types";
+import { InviteData, WorkspaceInput } from "../types/workspace.types";
 import prisma from "../util/prisma";
 import { v4 as uuidv4 } from 'uuid';
 import slugify from "slugify";
 import bcrypt from 'bcryptjs';
 import { SearchParams } from "../types/types";
 import sendEmail from "../util/sendEmail";
+import redisClient from "../cache/redisClient";
 
 export const workspaceService = {
   createWorkspace: async (userId: string, data: WorkspaceInput) => {
-    try {
-      // Step 1: Validate input
-      if (!userId || !data.name || typeof data.name !== 'string') {
-        throw new Error('User ID and workspace name are required');
-      }
-
-      const baseName = data.name.trim();
-
-      // Step 2: Check if workspace with the same name exists
-      const existing = await prisma.workspace.findUnique({
-        where: { name: baseName },
-      });
-
-      if (existing) {
-        throw new Error(`A workspace with the name "${baseName}" already exists.`);
-      }
-
-      // Step 3: Generate a unique slug
-      const slug = `${slugify(baseName, { lower: true })}-${uuidv4().slice(0, 6)}`;
-
-      // Step 4: Create the workspace
-      const createdWorkspace = await prisma.workspace.create({
-        data: {
-          name: baseName,
-          slug,
-          description: data.description?.trim() || null,
-          images: Array.isArray(data.images) ? data.images : [],
-          openingTime: data.openingTime || null,
-          closingTime: data.closingTime || null,
-          isActive: typeof data.isActive === 'boolean' ? data.isActive : true,
-          owner: {
-            connect: { id: userId },
-          },
-        },
-        include: {
-          owner: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-              role: true,
-            },
-          },
-        },
-      });
-
-      return createdWorkspace;
-    } catch (error: any) {
-      console.error('❌ Error creating workspace:', error);
-      throw new Error(error.message || 'Failed to create workspace');
+    // Validate input
+    if (!userId || !data.name?.trim()) {
+      throw new Error('User ID and workspace name are required');
     }
+
+    const baseName = data.name.trim();
+
+    // Check for existing workspace
+    await prisma.workspace.findUnique({ where: { name: baseName } }).then(existing => {
+      if (existing) throw new Error(`Workspace "${baseName}" already exists`);
+    });
+
+    // Generate unique slug
+    const slug = `${slugify(baseName, { lower: true })}-${uuidv4().slice(0, 6)}`;
+
+    // Create workspace
+    return prisma.workspace.create({
+      data: {
+        name: baseName,
+        slug,
+        description: data.description?.trim() ?? null,
+        images: Array.isArray(data.images) ? data.images : [],
+        openingTime: data.openingTime ?? null,
+        closingTime: data.closingTime ?? null,
+        isActive: data.isActive ?? true,
+        owner: { connect: { id: userId } },
+      },
+      include: {
+        owner: {
+          select: { id: true, firstName: true, lastName: true, email: true, role: true },
+        },
+      },
+    }).catch(err => {
+      throw new Error(err.message || 'Failed to create workspace');
+    });
   },
 
   getAdminWorkspaces: async (userId: string) => {
@@ -89,87 +73,77 @@ export const workspaceService = {
         },
       });
     } catch (error: any) {
-      console.error('❌ Error fetching admin workspaces from DB:', error);
+      console.error('Error fetching admin workspaces from DB:', error);
       throw new Error('Failed to fetch admin workspaces');
     }
   },
 
   getWorkspace: async ({ search, page, limit }: SearchParams) => {
-    try {
-      const filters: Prisma.WorkspaceWhereInput[] = [];
+    const cacheKey = `workspaces:search=${search || 'all'}:page=${page}:limit=${limit}`;
 
-      if (search) {
-        if (!isNaN(Number(search))) {
-          filters.push({ id: Number(search) });
-        }
+    // Check cache
+    const cached = await redisClient.get(cacheKey);
+    if (cached) return JSON.parse(cached);
 
-        filters.push(
-          { name: { contains: search, mode: 'insensitive' } },
-          { slug: { contains: search, mode: 'insensitive' } }
-        );
-      }
+    // Define search filter
+    const where: Prisma.WorkspaceWhereInput = search
+      ? { slug: { contains: search, mode: 'insensitive' } }
+      : {};
 
-      const whereClause: Prisma.WorkspaceWhereInput = filters.length > 0 ? { OR: filters } : {};
+    // Fetch data with pagination
+    const results = await prisma.workspace.findMany({
+      where,
+      skip: (page - 1) * limit,
+      take: limit + 1,
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        images: true,
+        openingTime: true,
+        closingTime: true,
+        isActive: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
 
-      const [data, total] = await Promise.all([
-        prisma.workspace.findMany({
-          where: whereClause,
-          skip: (page - 1) * limit,
-          take: limit,
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            description: true,
-            images: true,
-            openingTime: true,
-            closingTime: true,
-            isActive: true,
-            createdAt: true,
-            updatedAt: true,
-            products: {
-              select: { id: true, name: true },
-            },
-            categories: {
-              select: { id: true, name: true },
-            },
-          },
-          orderBy: {
-            createdAt: 'desc',
-          },
-        }),
-        prisma.workspace.count({ where: whereClause }),
-      ]);
+    // Prepare response
+    const hasNextPage = results.length > limit;
+    const data = hasNextPage ? results.slice(0, limit) : results;
+    const response = { data, meta: { page, limit, hasNextPage } };
 
-      return { data, total };
-    } catch (error: any) {
-      console.error('❌ Error fetching workspace from DB:', error);
-      throw new Error('Failed to fetch workspace');
-    }
+    // Cache result
+    await redisClient.setEx(cacheKey, 60, JSON.stringify(response));
+
+    return response;
   },
 
   updateWorkspace: async (workspaceId: number, userId: string, data: Partial<WorkspaceInput>) => {
-    const workspace = await prisma.workspace.findFirst({
-      where: { id: workspaceId, ownerId: userId },
-    });
-
-    if (!workspace) throw new Error('Unauthorized or workspace not found');
-
     return prisma.workspace.update({
-      where: { id: workspaceId },
+      where: { id: workspaceId, ownerId: userId },
       data,
       include: { owner: true },
+    }).catch(() => {
+      throw new Error('Unauthorized or workspace not found');
     });
   },
 
   deleteWorkspace: async (workspaceId: number, userId: string) => {
-    const workspace = await prisma.workspace.findFirst({
+    // Validate workspace existence and ownership in one query
+    const workspace = await prisma.workspace.findFirstOrThrow({
       where: { id: workspaceId, ownerId: userId },
+    }).catch((err) => {
+      throw new Error('workspace not found', { cause: err });
     });
 
-    if (!workspace) throw new Error('Unauthorized or workspace not found');
-
-    await prisma.workspace.delete({ where: { id: workspaceId } });
+    // Delete invitations and workspace in a transaction
+    await prisma.$transaction([
+      prisma.invitation.deleteMany({ where: { workspaceId } }),
+      prisma.workspace.delete({ where: { id: workspaceId } }),
+    ]).catch(err => {
+      throw new Error(`Failed to delete workspace: ${err.message}`);
+    });
   },
 
   removeUserFromWorkspace: async (
@@ -232,102 +206,70 @@ export const workspaceService = {
     return `User ${email} has been removed from the workspace`;
   }
   ,
-  // const { email, role, workspaceId } = data;
-  // const inviteToken = uuidv4();
-  // const tempPassword = uuidv4().slice(0, 8);
-  // const hashedPassword = await bcrypt.hash(tempPassword, 10);
   inviteUserToWorkspace: async (
-    data: { email: string; role: Role; workspaceId: number },
+    { email, role, workspaceId }: InviteData,
     invitedById: string
   ) => {
-    const inviteToken = uuidv4();
-    const tempPassword = uuidv4().slice(0, 8);
-
-    // Fetch data in parallel
-    const [existingInvite, existingUser, workspaceWithUser] = await Promise.all([
-      prisma.invitation.findFirst({
-        where: {
-          email: data.email,
-          workspaceId: data.workspaceId,
-          status: InvitationStatus.ACCEPTED,
-        },
-        select: {
-          id: true,
-        },
-      }),
-      prisma.user.findUnique({
-        where: {
-          email: data.email,
-        },
-        select: {
-          id: true,
-          firstName: true,
-        },
-      }),
+    // Validate workspace and user status in parallel
+    const [workspace, existingInvite, existingUser] = await Promise.all([
       prisma.workspace.findUnique({
-        where: {
-          id: data.workspaceId,
-        },
-        select: {
-          name: true,
-          users: {
-            where: {
-              email: data.email,
-            },
-            select: {
-              id: true,
-            },
-          },
-        },
+        where: { id: workspaceId },
+        select: { id: true, name: true, users: { where: { email }, select: { id: true } } },
+      }).then(ws => {
+        if (!ws) throw new Error('Workspace not found');
+        if (ws.users.length > 0) return null; // User already in workspace
+        return ws;
       }),
+      prisma.invitation.findFirst({
+        where: { email, workspaceId, status: InvitationStatus.ACCEPTED },
+      }).then(invite => {
+        if (invite) throw new Error('Invitation already accepted for this workspace');
+        return invite;
+      }),
+      prisma.user.findUnique({ where: { email }, select: { id: true, firstName: true } }),
     ]);
 
+    if (!workspace) return null; // User already in workspace
 
-    if (!workspaceWithUser) throw new Error('Workspace not found');
-
-    if (existingInvite) {
-      throw new Error('Invitation already sent to this email for this workspace');
-    }
-
-    if (workspaceWithUser.users?.length > 0) {
-      throw new Error('User has already accepted invitation and is in the workspace');
-    }
-
+    // Create or retrieve user
     let invitedUserId = existingUser?.id;
     let firstName = existingUser?.firstName ?? 'User';
 
     if (!existingUser) {
+      const tempPassword = uuidv4().slice(0, 8);
       const hashedPassword = await bcrypt.hash(tempPassword, 10);
       const newUser = await prisma.user.create({
         data: {
-          email: data.email,
+          email,
           password: hashedPassword,
-          role: data.role,
+          role,
           isActive: true,
           firstName: 'Invited',
           lastName: 'User',
         },
         select: { id: true, firstName: true },
       });
-
       invitedUserId = newUser.id;
       firstName = newUser.firstName;
     }
 
+    // Create invitation
+    const inviteToken = uuidv4();
     const invitation = await prisma.invitation.create({
       data: {
-        email: data.email,
-        tempPassword,
+        email,
+        tempPassword: uuidv4().slice(0, 8),
         inviteToken,
         status: InvitationStatus.PENDING,
-        role: data.role,
-        workspaceId: data.workspaceId,
+        role,
+        workspaceId,
         invitedById,
         invitedUserId,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
       },
     });
-    // Email content
+
+    // Send email
     const emailHtml = `
       <!DOCTYPE html>
       <html>
@@ -336,28 +278,20 @@ export const workspaceService = {
           <div style="max-width: 600px; margin: auto; background: white; padding: 30px; border-radius: 10px;">
             <h2 style="color: #333;">👋 You're Invited!</h2>
             <p>Hi <strong>${firstName}</strong>,</p>
-            <p>You’ve been invited to join the workspace <strong>${workspaceWithUser.name}</strong> as a <strong>${data.role}</strong>.</p>
-            <p>Your temporary password is:</p>
-            <p style="font-size: 18px; background: #f0f0f0; padding: 10px; display: inline-block; border-radius: 5px;">
-              ${tempPassword}
-            </p>
-            <p>Please login and update your password.</p>
+            <p>You’ve been invited to join <strong>${workspace.name}</strong> as a <strong>${role}</strong>.</p>
+            <p>Your temporary password is: <strong style="background: #f0f0f0; padding: 5px; border-radius: 3px;">${invitation.tempPassword}</strong></p>
+            <p>Please log in and update your password.</p>
             <a href="${process.env.SERVER_URL}/api/v1/workspaces/invitation/accept/${inviteToken}" 
-              style="display: inline-block; margin-top: 20px; padding: 12px 24px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 6px;">
+               style="display: inline-block; margin: 20px 0; padding: 12px 24px; background: #3b82f6; color: white; text-decoration: none; border-radius: 6px;">
               Accept Invitation
             </a>
-            <p style="margin-top: 40px; font-size: 12px; color: #999;">Backey Management &copy; ${new Date().getFullYear()}</p>
+            <p style="font-size: 12px; color: #999;">Backey Management © ${new Date().getFullYear()}</p>
           </div>
         </body>
       </html>
     `;
 
-    await sendEmail(
-      data.email,
-      `You're invited to join ${workspaceWithUser.name}`,
-      emailHtml
-    );
-
+    await sendEmail(email, `Invitation to join ${workspace.name}`, emailHtml);
     return invitation;
   },
 
@@ -417,66 +351,31 @@ export const workspaceService = {
 
   setRolesPermissionService: async (
     workspaceId: number,
-    role: string,
-    permission: string,
+    role: Role,
+    permissions: string[],
     userId: string
   ) => {
-    try {
-      // Step 1: Validate workspace and check if the user is the admin owner
-      const workspace = await prisma.workspace.findUnique({
-        where: { id: workspaceId },
-        include: { owner: true },
-      });
+    // Validate workspace and ownership
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { id: true, ownerId: true },
+    });
 
-      if (!workspace) {
-        throw new Error('Workspace not found');
-      }
+    if (!workspace) throw new Error('Workspace not found');
+    if (workspace.ownerId !== userId) throw new Error('Only the workspace owner can assign permissions');
 
-      if (workspace.ownerId !== userId) {
-        throw new Error('Only the admin who owns the workspace can assign permissions');
-      }
-
-      // Step 2: Check if the role permission already exists
-      const existingRolePermission = await prisma.rolePermission.findUnique({
-        where: {
-          workspaceId_role: {
-            workspaceId,
-            role: role.toUpperCase() as Role,
-          },
-        },
-      });
-
-      if (existingRolePermission) {
-        // The role permission exists, so we'll update it instead of creating a new one
-        const updatedPermission = await prisma.rolePermission.update({
-          where: {
-            workspaceId_role: {
-              workspaceId,
-              role: role.toUpperCase() as Role,
-            },
-          },
-          data: {
-            permission: Array.from(new Set([...existingRolePermission.permission, permission])),
-          },
-        });
-
-        return updatedPermission; // Return the updated role permission
-      }
-
-      // Step 3: Create a new role permission if it doesn't exist
-      const newPermission = await prisma.rolePermission.create({
-        data: {
-          workspaceId,
-          role: role.toUpperCase() as Role,
-          permission: [permission],
-        },
-      });
-
-      return newPermission; // Return the newly created permission
-    } catch (error) {
-      console.error('Error assigning role permission:', error);
-      throw new Error('Failed to assign role permission');
-    }
+    // Upsert role permission
+    return prisma.rolePermission.upsert({
+      where: { workspaceId_role: { workspaceId, role } },
+      update: {
+        permission: { push: permissions }, // Add new permissions, automatically handles duplicates
+      },
+      create: {
+        workspaceId,
+        role,
+        permission: permissions,
+      },
+    });
   },
 
   getWorkspaceUsers: async (workspaceId: number, userId: string) => {
@@ -506,8 +405,12 @@ export const workspaceService = {
   },
 
   getWorkspacesByUserId: async (userId: string) => {
+    if (!userId) {
+      throw new Error('User ID is required');
+    }
+
     try {
-      return await prisma.workspace.findMany({
+      const workspaces = await prisma.workspace.findMany({
         where: {
           users: {
             some: {
@@ -522,13 +425,28 @@ export const workspaceService = {
           description: true,
           isActive: true,
           createdAt: true,
-          updatedAt: true,
         },
       });
+
+      if (!workspaces || workspaces.length === 0) {
+        throw new Error('No workspaces found for this user');
+      }
+
+      return workspaces;
     } catch (error) {
-      throw new Error('Failed to fetch user workspaces');
+      // Log the actual error for debugging purposes
+      console.error(error);
+
+      // Check if it's a Prisma error or generic
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        // Handle specific Prisma errors if necessary
+        throw new Error('Database query failed: ' + error.message);
+      }
+
+      throw new Error('Failed to fetch user workspaces: ' + error);
     }
   },
+
   toggleWorkspaceStatus: async (workspaceId: number): Promise<boolean> => {
     try {
       const workspace = await prisma.workspace.findUnique({
@@ -582,18 +500,44 @@ export const workspaceService = {
     }
   },
 
-  removeRolePermission: async (workspaceId: number, role: Role, permissionToRemove: string) => {
-    const existing = await prisma.rolePermission.findFirst({
-      where: { workspaceId, role },
+  removeRolePermission: async (workspaceId: number, role: Role, permissionToRemove: string, userId: string) => {
+    // Validate workspace and ownership
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { id: true, ownerId: true },
     });
 
-    if (!existing) throw new Error('Role permission not found');
+    if (!workspace) throw new Error('Workspace not found');
+    if (workspace.ownerId !== userId) throw new Error('Only the workspace owner can remove permissions');
 
-    const updatedPermissions = existing.permission.filter((p) => p !== permissionToRemove);
+    // Use transaction for atomic operation
+    return prisma.$transaction(async (tx) => {
+      // Find role permission
+      const rolePermission = await tx.rolePermission.findUnique({
+        where: { workspaceId_role: { workspaceId, role } },
+      });
 
-    return prisma.rolePermission.update({
-      where: { id: existing.id },
-      data: { permission: updatedPermissions },
+      if (!rolePermission) throw new Error('Role permission not found');
+
+      // Check if permission exists
+      if (!rolePermission.permission.includes(permissionToRemove)) return null;
+
+      // Filter out the permission
+      const updatedPermissions = rolePermission.permission.filter(p => p !== permissionToRemove);
+
+      // Delete if no permissions remain, otherwise update
+      if (updatedPermissions.length === 0) {
+        await tx.rolePermission.delete({
+          where: { workspaceId_role: { workspaceId, role } },
+        });
+      } else {
+        await tx.rolePermission.update({
+          where: { workspaceId_role: { workspaceId, role } },
+          data: { permission: updatedPermissions },
+        });
+      }
+
+      return true;
     });
   },
   exportWorkspaceData: async (

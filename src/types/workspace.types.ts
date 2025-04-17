@@ -1,3 +1,5 @@
+import { Role } from "@prisma/client";
+
 export type WorkspaceInput = {
   name: string;
   description?: string;
@@ -5,5 +7,10 @@ export type WorkspaceInput = {
   openingTime?: string;
   closingTime?: string;
   isActive?: boolean;
-
 };
+
+export interface InviteData {
+  email: string;
+  role: Role;
+  workspaceId: number;
+}

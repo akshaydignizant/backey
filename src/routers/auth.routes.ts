@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { authController } from '../controllers/auth.controller';
 import { authMiddleware } from '../middleware/auth.middleware';
 import { decryptPayload } from '../middleware/decrypt-payload';
+import roleRestriction from '../middleware/roleRestriction';
+import { Role } from '@prisma/client';
 
 const router = Router();
 
@@ -13,6 +15,6 @@ router.post('/logout', authMiddleware, authController.logout);
 router.post('/forgot-password', authController.forgotPassword);
 router.post('/verify-otp', authController.verifyOtp);
 router.post('/reset-password', authController.resetPassword);
-router.put('/profile', authController.UpdateProfile);
+router.put('/user/:id', authMiddleware, roleRestriction([Role.ADMIN]), authController.UpdateProfile);
 
 export default router;
