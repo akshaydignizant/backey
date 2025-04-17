@@ -26,6 +26,7 @@ export const authService = {
       select: {
         id: true,
         email: true,
+
       },
     });
 
@@ -208,5 +209,76 @@ export const authService = {
 
     await redisClient.del(`reset:${resetToken}`);
     return true;
-  }
+  },
+
+  updateUserProfileService: async (userId: string, data: any) => {
+    const {
+      firstName,
+      lastName,
+      phone,
+      profileImageUrl,
+      email,
+      locationId
+    } = data;
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        firstName,
+        lastName,
+        phone,
+        profileImageUrl,
+        email,
+        locationId,
+        updatedAt: new Date()
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        profileImageUrl: true,
+        locationId: true,
+        updatedAt: true
+      }
+    });
+
+    return updatedUser;
+  },
+  // adminUpdateUserProfileService: async (
+  //   workspaceId: string,
+  //   targetUserId: string,
+  //   updateData: {
+  //     email?: string;
+  //     fullName?: string;
+  //     phoneNumber?: string;
+  //     role?: Role;
+  //     designation?: string;
+  //   }
+  // ) => {
+  //   const user = await prisma.user.findUnique({
+  //     where: { id: targetUserId },
+  //     select: { id: true, role: true },
+  //   });
+
+  //   if (!user) {
+  //     throw new Error('User not found');
+  //   }
+
+  //   // Ensure the user belongs to the same workspace and is not an ADMIN
+  //   if (user. !== workspaceId || !['MANAGER', 'STAFF'].includes(user.role)) {
+  //     throw new Error('Unauthorized to update this user');
+  //   }
+
+  //   const updatedUser = await prisma.user.update({
+  //     where: { id: targetUserId },
+  //     data: {
+  //       ...updateData,
+  //     },
+  //   });
+
+  //   return updatedUser;
+  // },
+
 };

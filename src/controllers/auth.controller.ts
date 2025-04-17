@@ -38,10 +38,10 @@ export const authController = {
       }
 
       // Phone (optional, if given)
-      const trimmedPhone = phone?.trim() || null;
-      if (trimmedPhone) {
-        return httpResponse(req, res, 400, 'Enter valid phone digits');
-      }
+      // const trimmedPhone = phone?.trim() || null;
+      // if (trimmedPhone) {
+      //   return httpResponse(req, res, 400, 'Enter valid phone digits');
+      // }
 
       // Role (optional): default to ADMIN if not passed
       const roleEnum =
@@ -54,7 +54,7 @@ export const authController = {
         lastName?.trim() || null,
         email.toLowerCase(),
         password,
-        trimmedPhone,
+        phone ?? null,
         roleEnum
       );
       // Encrypting response for frontend
@@ -98,10 +98,10 @@ export const authController = {
   },
   signintest: async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { email, password } = req.body as SigninRequest;
-      // const { firstName, lastName, email, password, phone, role } = req.body;
+      // const { email, password } = req.body as SigninRequest;
+      const { firstName, lastName, email, password, phone, role } = req.body;
 
-      const encrypted = CryptoHelper.encrypt({ email, password });
+      const encrypted = CryptoHelper.encrypt({ firstName, lastName, email, password, phone, role });
 
       res.status(200).json({
         success: true,
@@ -175,4 +175,56 @@ export const authController = {
       httpError(next, err, req, 500);
     }
   },
-};
+
+  UpdateProfile: async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user?.id;
+      if (!userId)
+        return httpResponse(req, res, 401, 'Unauthorized');
+
+      const updatedUser = await authService.updateUserProfileService(userId, req.body);
+      httpResponse(req, res, 200, 'Profile updated successfully', updatedUser);
+    } catch (error: any) {
+      return httpError(next, error, req, 500);
+    }
+  },
+  // adminUpdateUserProfile: async (
+  //   req: Request,
+  //   res: Response,
+  //   next: NextFunction
+  // ): Promise<void> => {
+  //   try {
+  //     const requester = req.user; // Assumes authentication middleware adds req.user
+  //     const workspaceId = req.params.workspaceId;
+  //     const userIdToUpdate = req.params.userId;
+
+  //     if (!requester || requester.role !== 'ADMIN') {
+  //       return httpResponse(req, res, 403, 'Access denied. Not an admin.');
+  //     }
+
+  //     const { email, fullName, phoneNumber, role, designation } = req.body;
+
+  //     // Optional: Validate allowed roles
+  //     if (role && !['MANAGER', 'STAFF'].includes(role)) {
+  //       return httpResponse(req, res, 400, 'Invalid role. Only MANAGER or STAFF allowed.');
+  //     }
+
+  //     const updatedUser = await authService.adminUpdateUserProfileService(
+  //       workspaceId,
+  //       userIdToUpdate,
+  //       {
+  //         email,
+  //         fullName,
+  //         phoneNumber,
+  //         role: role as Role,
+  //         designation,
+  //       }
+  //     );
+
+  //     return httpResponse(req, res, 200, 'User updated successfully', updatedUser);
+  //   } catch (err: any) {
+  //     return httpError(next, err, req, 400);
+  //   }
+  // },
+
+}
