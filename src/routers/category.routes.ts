@@ -27,7 +27,7 @@ const router = Router();
 // Existing Routes
 router.post('/:workspaceId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), createCategory);
 router.get('/:workspaceId', authMiddleware, getCategoriesInWorkspace);
-router.put('/:workspaceId/:categoryId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), updateCategory);
+router.put('/:categoryId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), updateCategory);
 router.delete('/:workspaceId/:categoryId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), deleteCategory);
 
 // Additional Routes

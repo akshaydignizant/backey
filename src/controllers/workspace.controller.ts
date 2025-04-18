@@ -12,7 +12,7 @@ export const createWorkspace = async (req: Request, res: Response, next: NextFun
   try {
     const userId = req.user?.userId;
     const { name, description, openingTime, closingTime, isActive } = req.body;
-    const images = req.file ? req.file.path : null;
+    const images = req.files ? (req.files as Express.Multer.File[]).map((file) => file.path) : [];
     if (!name) {
       return httpResponse(req, res, 400, 'Workspace name is required');
     }
@@ -20,12 +20,11 @@ export const createWorkspace = async (req: Request, res: Response, next: NextFun
     const workspace = await workspaceService.createWorkspace(userId as string, {
       name,
       description,
-      images: images ? [images] : undefined,
+      images: images,
       openingTime,
       closingTime,
       isActive,
     });
-
     return httpResponse(req, res, 201, 'Workspace created successfully', workspace);
   } catch (error) {
     logger.error('Error creating workspace:', error);
@@ -133,7 +132,7 @@ export const deleteWorkspace = async (req: Request, res: Response, next: NextFun
     if (!userId) {
       return httpError(next, new Error('Unauthorized: missing user ID'), req);
     }
-    await workspaceService.deleteWorkspace(workspaceId, userId as string);
+    await workspaceService.deleteWorkspace(workspaceId, userId);
     return httpResponse(req, res, 204, 'Workspace deleted successfully');
   } catch (error) {
     logger.error('Error deleting workspace:', error);
@@ -380,7 +379,7 @@ export const removeRolePermission = async (req: Request, res: Response, next: Ne
   }
 
   try {
-    await workspaceService.removeRolePermission(workspaceId, role, permission, userId as string);
+    await workspaceService.removeRolePermission(workspaceId, role, permission, userId);
     return httpResponse(req, res, 200, 'Permission removed successfully');
   } catch (error) {
     return httpError(next, error, req);

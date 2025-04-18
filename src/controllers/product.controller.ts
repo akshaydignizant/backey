@@ -107,11 +107,38 @@ export const bulkUploadProducts = async (req: Request, res: Response, next: Next
 export const searchProducts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { workspaceId } = req.params;
-    const { q } = req.query;
-    const products = await productService.searchProducts(Number(workspaceId), String(q));
+    const { q, page = 1, limit = 10 } = req.query;  // Default pagination: page 1, limit 10
+
+    // Validate workspaceId (must be a valid number)
+    const parsedWorkspaceId = Number(workspaceId);
+    if (isNaN(parsedWorkspaceId) || parsedWorkspaceId <= 0) {
+      return httpResponse(req, res, 400, 'Invalid workspaceId');
+    }
+
+    // Sanitize and validate search keyword
+    const keyword = String(q || '').trim();
+    if (keyword.length < 3) {
+      return httpResponse(req, res, 400, 'Search query must be at least 3 characters');
+    }
+
+    // Parse page and limit to integers and handle invalid values
+    const parsedPage = Number(page);
+    const parsedLimit = Number(limit);
+
+    if (isNaN(parsedPage) || parsedPage <= 0) {
+      return httpResponse(req, res, 400, 'Invalid page number');
+    }
+    if (isNaN(parsedLimit) || parsedLimit <= 0 || parsedLimit > 50) {
+      return httpResponse(req, res, 400, 'Invalid limit, should be between 1 and 50');
+    }
+
+    // Perform search with pagination
+    const products = await productService.searchProducts(parsedWorkspaceId, keyword, parsedPage, parsedLimit);
+
     return httpResponse(req, res, 200, 'Products search results', products);
   } catch (err) {
-    return httpError(next, err, req, 400);
+    console.error('❌ Error searching products:', err);
+    return httpError(next, err, req, 500);
   }
 };
 

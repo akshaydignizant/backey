@@ -10,40 +10,28 @@ import { CryptoHelper } from '../util/crypto-helper';
 export const authController = {
   signup: async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { firstName, lastName, email, password, phone, role } = req.body as SignupRequest;
+      const { firstName, lastName, email, password, phone, role, locationId, location } = req.body;
 
-      // Required fields check
       if (!firstName || !email || !password) {
         return httpResponse(req, res, 400, 'First name, email, and password are required');
       }
 
-      // Validate first name (alphanumeric)
       if (!/^[a-zA-Z0-9]+$/.test(firstName)) {
         return httpResponse(req, res, 400, 'First name must be alphanumeric');
       }
 
-      // Optional last name check (if provided)
       if (lastName && !/^[a-zA-Z0-9]+$/.test(lastName)) {
         return httpResponse(req, res, 400, 'Last name must be alphanumeric');
       }
 
-      // Email format
       if (!/^[\w.-]+@[a-zA-Z\d.-]+\.[a-zA-Z]{2,}$/.test(email)) {
         return httpResponse(req, res, 400, 'Invalid email format');
       }
 
-      // Password strength
       if (password.length < 6) {
         return httpResponse(req, res, 400, 'Password must be at least 6 characters long');
       }
 
-      // Phone (optional, if given)
-      // const trimmedPhone = phone?.trim() || null;
-      // if (trimmedPhone) {
-      //   return httpResponse(req, res, 400, 'Enter valid phone digits');
-      // }
-
-      // Role (optional): default to ADMIN if not passed
       const roleEnum =
         role && Object.values(Role).includes(role.toUpperCase() as Role)
           ? (role.toUpperCase() as Role)
@@ -55,9 +43,11 @@ export const authController = {
         email.toLowerCase(),
         password,
         phone ?? null,
-        roleEnum
+        roleEnum,
+        locationId ?? null,
+        location ?? null
       );
-      // Encrypting response for frontend
+
       const encryptedResponse = CryptoHelper.encrypt({
         message: 'Signup successful',
         userData,
@@ -69,6 +59,7 @@ export const authController = {
         encryptedData: encryptedResponse.encryptedData,
         iv: encryptedResponse.iv,
       });
+
       // httpResponse(req, res, 200, 'Signup successful', userData);
     } catch (err) {
       return httpError(next, err, req);
@@ -190,23 +181,6 @@ export const authController = {
       httpResponse(req, res, 200, 'Profile updated successfully', updatedUser);
     } catch (error: any) {
       return httpError(next, error, req, 500);
-    }
-  },
-  adminUpdateUserProfile: async (req: Request, res: Response) => {
-    const userId = req.params.id;
-    const updates = req.body;
-
-    try {
-      const updatedUser = await authService.adminUpdateUserProfileService(userId, updates);
-
-      return res.status(200).json({
-        message: 'User updated successfully',
-        data: updatedUser,
-      });
-    } catch (err: any) {
-      return res.status(400).json({
-        message: err.message,
-      });
     }
   },
 }

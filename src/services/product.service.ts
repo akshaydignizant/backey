@@ -210,13 +210,31 @@ export const productService = {
     return created;
   },
 
-  searchProducts: async (workspaceId: number, keyword: string) => {
+  searchProducts: async (workspaceId: number, keyword: string, page: number, limit: number) => {
+    const skip = (page - 1) * limit;
+    // Check if the workspace exists
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+    });
+
+    if (!workspace) {
+      throw new Error('Workspace not found');
+    }
+    // Use pagination, sanitize the input, and perform case-insensitive search on the name.
     return await prisma.product.findMany({
       where: {
         workspaceId,
         name: { contains: keyword, mode: 'insensitive' },
       },
-      include: { variants: true, category: true },
+      include: {
+        variants: true,
+        category: true,
+      },
+      skip,   // Skip products based on page
+      take: limit,  // Limit the number of results
+      orderBy: {
+        name: 'asc',  // You can choose the sort order based on your needs
+      },
     });
   },
 

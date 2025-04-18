@@ -6,10 +6,33 @@ export const categoryService = {
   // Create Category
   createCategory: async (workspaceId: number, data: any) => {
     try {
+      // Validate category name
       if (!data.name || typeof data.name !== 'string') {
         throw new Error('Invalid category name');
       }
-      const slug = data.name ? data.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') : '';
+
+      // Check if the workspace exists
+      const workspace = await prisma.workspace.findUnique({
+        where: { id: workspaceId },
+      });
+
+      if (!workspace) {
+        throw new Error('Workspace not found');
+      }
+
+      // Generate slug from category name
+      const slug = data.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+
+      // Check if a category with the same slug already exists in the same workspace
+      const existingCategory = await prisma.category.findUnique({
+        where: { slug },
+      });
+
+      if (existingCategory) {
+        throw new Error('A category with this slug already exists.');
+      }
+
+      // Create the new category
       const createdCategory = await prisma.category.create({
         data: {
           ...data,
@@ -25,9 +48,19 @@ export const categoryService = {
     }
   },
 
+
   // Get Categories in a Workspace
   getCategoriesInWorkspace: async (workspaceId: number) => {
     try {
+
+      // Check if the workspace exists
+      const workspace = await prisma.workspace.findUnique({
+        where: { id: workspaceId },
+      });
+
+      if (!workspace) {
+        throw new Error('Workspace not found');
+      }
       const categories = await prisma.category.findMany({
         where: { workspaceId },
         include: {
@@ -46,6 +79,7 @@ export const categoryService = {
   // Update Category
   updateCategory: async (categoryId: string, data: any) => {
     try {
+
       const existingCategory = await prisma.category.findUnique({
         where: { id: categoryId },
       });

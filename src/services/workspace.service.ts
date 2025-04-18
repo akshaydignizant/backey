@@ -1,12 +1,12 @@
-import { InvitationStatus, Prisma, Role } from "@prisma/client";
-import { InviteData, WorkspaceInput } from "../types/workspace.types";
-import prisma from "../util/prisma";
+import { InvitationStatus, Prisma, Role } from '@prisma/client';
+import { InviteData, WorkspaceInput } from '../types/workspace.types';
+import prisma from '../util/prisma';
 import { v4 as uuidv4 } from 'uuid';
-import slugify from "slugify";
+import slugify from 'slugify';
 import bcrypt from 'bcryptjs';
-import { SearchParams } from "../types/types";
-import sendEmail from "../util/sendEmail";
-import redisClient from "../cache/redisClient";
+import { SearchParams } from '../types/types';
+import sendEmail from '../util/sendEmail';
+import redisClient from '../cache/redisClient';
 
 export const workspaceService = {
   createWorkspace: async (userId: string, data: WorkspaceInput) => {
@@ -24,6 +24,7 @@ export const workspaceService = {
 
     // Generate unique slug
     const slug = `${slugify(baseName, { lower: true })}-${uuidv4().slice(0, 6)}`;
+    console.log(Array.isArray(data.images) ? data.images : [], 'data.images');
 
     // Create workspace
     return prisma.workspace.create({
@@ -31,7 +32,7 @@ export const workspaceService = {
         name: baseName,
         slug,
         description: data.description?.trim() ?? null,
-        images: Array.isArray(data.images) ? data.images : [],
+        images: data.images ?? [],
         openingTime: data.openingTime ?? null,
         closingTime: data.closingTime ?? null,
         isActive: data.isActive ?? true,

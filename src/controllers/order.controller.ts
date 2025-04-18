@@ -11,8 +11,7 @@ import httpError from '../util/httpError';
 
 export const createOrder = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const workspaceId = Number(req.params.workspaceId);
-  const userId = req.user?.userId;
-  const { shippingAddressId, billingAddressId, paymentMethod, items, notes } = req.body;
+  const { userId, shippingAddressId, billingAddressId, paymentMethod, items, notes } = req.body;
   const authUserId = req.user?.userId;
 
   if (isNaN(workspaceId) || !authUserId || !userId || !shippingAddressId || !billingAddressId || !paymentMethod || !items) {

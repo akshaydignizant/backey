@@ -4,7 +4,7 @@ import redisClient, { RedisTTL } from '../cache/redisClient';
 import { generateToken } from '../util/generateToken';
 import sendEmail from '../util/sendEmail';
 import crypto from 'crypto';
-import { Role, UserStatus } from '@prisma/client';
+import { Location, Role, User, UserStatus } from '@prisma/client';
 
 export const authService = {
   signupService: async (
@@ -13,7 +13,9 @@ export const authService = {
     email: string,
     password: string,
     phone: string | null,
-    role: Role
+    role: Role,
+    locationId?: string | null,
+    location?: any
   ) => {
     // Check for existing user by email or phone
     const existingUser = await prisma.user.findFirst({
@@ -23,38 +25,63 @@ export const authService = {
           ...(phone ? [{ phone }] : []),
         ],
       },
-      select: {
-        id: true,
-        email: true,
-
-      },
+      select: { id: true, email: true },
     });
 
     if (existingUser) throw new Error('User with this email or phone already exists');
 
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    let resolvedLocationId: string | null = null;
+
+    // Case 1: Use existing locationId
+    if (locationId) {
+      const existingLocation = await prisma.location.findUnique({ where: { id: locationId } });
+      if (!existingLocation) {
+        throw new Error('Invalid locationId');
+      }
+      resolvedLocationId = locationId;
+    }
+
+    // Case 2: Create a new location
+    if (!locationId && location && typeof location === 'object') {
+      const newLocation = await prisma.location.create({
+        data: {
+          name: location.name,
+          address: location.address,
+          street: location.street,
+          city: location.city,
+          region: location.region,
+          postalCode: location.postalCode,
+          country: location.country,
+          isDefault: location.isDefault ?? false,
+        }
+      });
+      resolvedLocationId = newLocation.id;
+    }
+
+    // Create new user
     const newUser = await prisma.user.create({
       data: {
         firstName,
         lastName,
         email,
         password: hashedPassword,
-        role,
         phone,
-      },
+        role,
+        locationId: resolvedLocationId,
+      }
     });
 
-    // Generate tokens
+    // Generate and store tokens
     const { token, refreshToken } = generateToken(newUser.id, newUser.role as Role);
 
-    // Store tokens in Redis
     await Promise.all([
       redisClient.setEx(`auth:${newUser.id}`, RedisTTL.ACCESS_TOKEN, token),
       redisClient.setEx(`refresh:${newUser.id}`, RedisTTL.REFRESH_TOKEN, refreshToken),
     ]);
 
-    // Return tokens and user info
     return {
       token,
       refreshToken,
@@ -62,6 +89,7 @@ export const authService = {
         id: newUser.id,
         email: newUser.email,
         role: newUser.role,
+        locationId: newUser.locationId,
       },
     };
   },
@@ -211,29 +239,56 @@ export const authService = {
     return true;
   },
 
-  updateUserProfileService: async (userId: string, data: any) => {
+  updateUserProfileService: async (userId: string, data: Partial<User> & { location?: Partial<Location> }) => {
     const {
       firstName,
       lastName,
       phone,
-      role,
-      status,
       profileImageUrl,
-      email
+      location
     } = data;
+
+    const updatePayload: any = {};
+
+    if (firstName && typeof firstName === 'string') updatePayload.firstName = firstName.trim();
+    if (lastName && typeof lastName === 'string') updatePayload.lastName = lastName.trim();
+    if (phone && typeof phone === 'string') updatePayload.phone = phone.trim();
+    if (profileImageUrl && typeof profileImageUrl === 'string') updatePayload.profileImageUrl = profileImageUrl.trim();
+
+    // Handle location if provided
+    if (location && typeof location === 'object') {
+      const {
+        name,
+        address,
+        street,
+        city,
+        region,
+        postalCode,
+        country
+      } = location;
+
+      // Create new location record
+      const newLocation = await prisma.location.create({
+        data: {
+          name: name?.trim() || `${firstName}'s location`,
+          address: address?.trim() || '',
+          street: street?.trim() || '',
+          city: city?.trim() || '',
+          region: region?.trim() || '',
+          postalCode: postalCode?.trim() || '',
+          country: country?.trim() || '',
+          isDefault: false
+        }
+      });
+
+      updatePayload.locationId = newLocation.id;
+    }
+
+    updatePayload.updatedAt = new Date();
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
-      data: {
-        firstName,
-        lastName,
-        phone,
-        profileImageUrl,
-        email,
-        role,
-        status,
-        updatedAt: new Date()
-      },
+      data: updatePayload,
       select: {
         id: true,
         firstName: true,
@@ -244,40 +299,22 @@ export const authService = {
         status: true,
         profileImageUrl: true,
         locationId: true,
+        location: {
+          select: {
+            id: true,
+            name: true,
+            address: true,
+            city: true,
+            region: true,
+            country: true
+          }
+        },
         updatedAt: true
       }
     });
 
     return updatedUser;
-  },
-  adminUpdateUserProfileService: async (
-    userId: string,
-    updates: Partial<{
-      firstName: string;
-      lastName: string;
-      email: string;
-      phone: string;
-      role: Role;
-      status: UserStatus;
-      isActive: boolean;
-      profileImageUrl: string;
-      locationId: string;
-    }>
-  ) => {
-    const existingUser = await prisma.user.findUnique({
-      where: { id: userId },
-    });
-
-    if (!existingUser) {
-      throw new Error('User not found');
-    }
-
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: updates,
-    });
-
-    return updatedUser;
   }
+
 
 };
