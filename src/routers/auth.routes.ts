@@ -10,7 +10,7 @@ const router = Router();
 router.post('/signup', decryptPayload, authController.signup);
 router.post('/signin-test', authController.signintest);    //frontend
 router.post('/signin', decryptPayload, authController.signin);
-router.post('/refresh-token', authMiddleware, authController.refreshToken);
+router.post('/refresh-token', authController.refreshToken);
 router.post('/logout', authMiddleware, authController.logout);
 router.post('/forgot-password', authController.forgotPassword);
 router.post('/verify-otp', authController.verifyOtp);
