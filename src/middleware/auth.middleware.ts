@@ -89,9 +89,25 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
             decoded = jwt.verify(token, process.env.JWT_SECRET!) as TokenPayload;
             console.log(`Token verified for user ${decoded.userId}, expires at: ${new Date((decoded.exp ?? 0) * 1000).toISOString()}`);
         } catch (error) {
+            // if (error instanceof TokenExpiredError) {
+            //     console.log(`Token expired for user ${decoded?.userId || 'unknown'}: ${error.message}`);
+            //     return httpResponse(req, res, 401, 'Token has expired. Please log in again.');
+            // }
             if (error instanceof TokenExpiredError) {
                 console.log(`Token expired for user ${decoded?.userId || 'unknown'}: ${error.message}`);
-                return httpResponse(req, res, 401, 'Token has expired. Please log in again.');
+                res.status(401).json({
+                    success: true,
+                    statusCode: 401,
+                    request: {
+                        ip: req.ip,
+                        method: req.method,
+                        url: req.originalUrl,
+                    },
+                    message: 'Token has expired. Please log in again.',
+                    data: null,
+                    errorCode: 'TOKEN_EXPIRED',
+                });
+                return
             }
             if (error instanceof JsonWebTokenError) {
                 console.log(`Invalid token: ${error.message}`);
@@ -115,12 +131,36 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
         const redisToken = await redisClient.get(`auth:${decoded.userId}`);
         if (!redisToken) {
             console.log(`Redis key auth:${decoded.userId} not found or expired`);
-            return httpResponse(req, res, 401, 'Session expired. Please log in again.');
+            res.status(401).json({
+                success: true,
+                statusCode: 401,
+                request: {
+                    ip: req.ip,
+                    method: req.method,
+                    url: req.originalUrl,
+                },
+                message: 'Session expired. Please log in again.',
+                data: null,
+                errorCode: 'TOKEN_EXPIRED',
+            });
+            return
         }
 
         if (redisToken !== token) {
             console.log(`Redis token mismatch for user ${decoded.userId}`);
-            return httpResponse(req, res, 401, 'TOKEN_EXPIRED');
+            res.status(401).json({
+                success: true,
+                statusCode: 401,
+                request: {
+                    ip: req.ip,
+                    method: req.method,
+                    url: req.originalUrl,
+                },
+                message: 'Invalid or mismatched token.',
+                data: null,
+                errorCode: 'TOKEN_EXPIRED',
+            });
+            return
         }
 
         // Attach userId and role to the request
