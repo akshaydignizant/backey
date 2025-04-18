@@ -71,18 +71,18 @@ export const authController = {
       const { email, password } = req.body as SigninRequest;
       const data = await authService.signInService(email, password);
       // Encrypting response for frontend
-      const encryptedResponse = CryptoHelper.encrypt({
-        message: 'Login successful',
-        data,
-      });
+      // const encryptedResponse = CryptoHelper.encrypt({
+      //   message: 'Login successful',
+      //   data,
+      // });
 
-      res.status(200).json({
-        success: true,
-        statusCode: 200,
-        encryptedData: encryptedResponse.encryptedData,
-        iv: encryptedResponse.iv,
-      });
-      // httpResponse(req, res, 200, 'Login successful', data);
+      // res.status(200).json({
+      //   success: true,
+      //   statusCode: 200,
+      //   encryptedData: encryptedResponse.encryptedData,
+      //   iv: encryptedResponse.iv,
+      // });
+      httpResponse(req, res, 200, 'Login successful', data);
     } catch (err) {
       httpError(next, err, req);
     }

@@ -120,33 +120,58 @@ export const workspaceService = {
     return response;
   },
 
-  updateWorkspace: async (workspaceId: number, userId: string, data: Partial<WorkspaceInput>) => {
-    return prisma.workspace.update({
-      where: { id: workspaceId, ownerId: userId },
-      data,
-      include: { owner: true },
-    }).catch(() => {
+  updateWorkspace: async (
+    workspaceId: number,
+    userId: string,
+    data: Partial<WorkspaceInput>
+  ) => {
+    try {
+      return await prisma.workspace.update({
+        where: {
+          id: workspaceId,
+          ownerId: userId
+        },
+        data,
+        include: {
+          owner: true
+        }
+      });
+    } catch (error) {
       throw new Error('Unauthorized or workspace not found');
-    });
+    }
   },
 
-  deleteWorkspace: async (workspaceId: number, userId: string) => {
-    // Validate workspace existence and ownership in one query
-    const workspace = await prisma.workspace.findFirstOrThrow({
-      where: { id: workspaceId, ownerId: userId },
-    }).catch((err) => {
-      throw new Error('workspace not found', { cause: err });
+  deleteWorkspaces: async (workspaceIds: number[], userId: string) => {
+    const workspaces = await prisma.workspace.findMany({
+      where: {
+        id: { in: workspaceIds },
+        ownerId: userId,
+      },
+      select: { id: true },
     });
 
-    // Delete invitations and workspace in a transaction
+    const foundIds = workspaces.map(ws => ws.id);
+    const notFoundIds = workspaceIds.filter(id => !foundIds.includes(id));
+
+    if (notFoundIds.length > 0) {
+      throw new Error(`Some workspaces not found or not owned by user: ${notFoundIds.join(', ')}`);
+    }
+
     await prisma.$transaction([
-      prisma.invitation.deleteMany({ where: { workspaceId } }),
-      prisma.workspace.delete({ where: { id: workspaceId } }),
-    ]).catch(err => {
-      throw new Error(`Failed to delete workspace: ${err.message}`);
-    });
+      prisma.rolePermission.deleteMany({
+        where: { workspaceId: { in: workspaceIds } },
+      }),
+      prisma.category.deleteMany({
+        where: { workspaceId: { in: workspaceIds } },
+      }),
+      prisma.invitation.deleteMany({
+        where: { workspaceId: { in: workspaceIds } },
+      }),
+      prisma.workspace.deleteMany({
+        where: { id: { in: workspaceIds } },
+      }),
+    ]);
   },
-
   removeUserFromWorkspace: async (
     workspaceId: number,
     email: string,

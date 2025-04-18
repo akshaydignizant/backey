@@ -12,8 +12,8 @@ router.post('/', authMiddleware, upload.array('images'), createWorkspace);
 router.get('/admin', authMiddleware, roleRestriction([Role.ADMIN]), getAdminWorkspaces); // Get all workspaces for admin
 router.get('/', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), searchWorkspaces);
 router.get('/user/:userId/workspaces', authMiddleware, getWorkspacesByUserId); // Get all workspaces of particular user
-router.put('/:workspaceId', authMiddleware, roleRestriction([Role.ADMIN]), updateWorkspace);
-router.delete('/:workspaceId', authMiddleware, roleRestriction([Role.ADMIN]), deleteWorkspace);
+router.put('/:workspaceId', authMiddleware, upload.array('images'), roleRestriction([Role.ADMIN]), updateWorkspace);
+router.delete('/', authMiddleware, roleRestriction([Role.ADMIN]), deleteWorkspace);
 router.post('/:workspaceId/invite', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), inviteUserToWorkspace);
 router.get('/invitation/accept/:invitetoken', acceptInvite);
 router.delete('/:workspaceId/removeUser', authMiddleware, roleRestriction([Role.ADMIN]), removeUserFromWorkspace);

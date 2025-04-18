@@ -7,24 +7,75 @@ import { exportToCSV } from '../util/exportCsv';
 import { AuthRequest } from '../types/types';
 import httpResponse from '../util/httpResponse';
 import httpError from '../util/httpError';
+import { prisma } from '../app';
 
 
 export const createOrder = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const workspaceId = Number(req.params.workspaceId);
-  const { userId, shippingAddressId, billingAddressId, paymentMethod, items, notes } = req.body;
   const authUserId = req.user?.userId;
 
-  if (isNaN(workspaceId) || !authUserId || !userId || !shippingAddressId || !billingAddressId || !paymentMethod || !items) {
+  const {
+    shippingAddressId,
+    billingAddressId,
+    shippingAddress,
+    billingAddress,
+    paymentMethod,
+    items,
+    notes,
+  } = req.body;
+
+  if (
+    isNaN(workspaceId) ||
+    !authUserId ||
+    !paymentMethod ||
+    !Array.isArray(items) ||
+    items.length === 0 ||
+    (!shippingAddressId && !shippingAddress) ||
+    (!billingAddressId && !billingAddress)
+  ) {
     return httpResponse(req, res, 400, 'Invalid input data');
   }
 
   try {
-    const order = await orderService.createOrder(workspaceId, { userId, shippingAddressId, billingAddressId, paymentMethod, items, notes }, authUserId);
+    let finalShippingAddressId = shippingAddressId;
+    let finalBillingAddressId = billingAddressId;
+
+    // Create shipping address if object provided
+    if (!finalShippingAddressId && shippingAddress) {
+      const createdShipping = await prisma.address.create({
+        data: { ...shippingAddress, userId: authUserId },
+      });
+      finalShippingAddressId = createdShipping.id;
+    }
+
+    // Create billing address if object provided
+    if (!finalBillingAddressId && billingAddress) {
+      const createdBilling = await prisma.address.create({
+        data: { ...billingAddress, userId: authUserId },
+      });
+      finalBillingAddressId = createdBilling.id;
+    }
+
+    // Proceed with order creation
+    const order = await orderService.createOrder(
+      workspaceId,
+      {
+        userId: authUserId,
+        shippingAddressId: finalShippingAddressId,
+        billingAddressId: finalBillingAddressId,
+        paymentMethod,
+        items,
+        notes,
+      },
+      authUserId
+    );
+
     return httpResponse(req, res, 201, 'Order created successfully', order);
   } catch (error) {
     return httpError(next, error, req);
   }
 };
+
 
 export const getOrders = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const workspaceId = Number(req.params.workspaceId);

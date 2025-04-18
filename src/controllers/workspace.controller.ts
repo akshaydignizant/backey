@@ -84,15 +84,28 @@ export const getWorkspacesByUserId = async (req: Request, res: Response): Promis
 export const updateWorkspace = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const workspaceId = parseInt(req.params.workspaceId);
-    const { name, description, isActive } = req.body;
     const userId = req.user?.userId;
-    const workspace = await workspaceService.updateWorkspace(workspaceId, userId as string, {
-      name,
-      description,
-      isActive,
-    },
-    );
-    httpResponse(req, res, 200, 'Workspace updated successfully', workspace);
+
+    if (isNaN(workspaceId) || !userId) {
+      return httpResponse(req, res, 400, 'Invalid workspace ID or user');
+    }
+
+    const { name, description, isActive } = req.body;
+
+    const data: any = {};
+    if (name !== undefined) data.name = name;
+    if (description !== undefined) data.description = description;
+    if (isActive !== undefined) data.isActive = isActive;
+
+    // Optional: handle uploaded images (e.g., logo or banners)
+    const images = req.files ? (req.files as Express.Multer.File[]).map((file) => file.path) : [];
+    if (images.length) {
+      data.images = images; // assumes your model supports an "images" field
+    }
+
+    const workspace = await workspaceService.updateWorkspace(workspaceId, userId, data);
+
+    return httpResponse(req, res, 200, 'Workspace updated successfully', workspace);
   } catch (error) {
     logger.error('Error updating workspace:', error);
     return httpError(next, error, req);
@@ -127,15 +140,22 @@ export const removeUserFromWorkspace = async (req: Request, res: Response, next:
 // Delete Workspace
 export const deleteWorkspace = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const workspaceId = parseInt(req.params.workspaceId);
+    const workspaceIds: number[] = req.body.workspaceIds;
     const userId = req.user?.userId;
+
     if (!userId) {
       return httpError(next, new Error('Unauthorized: missing user ID'), req);
     }
-    await workspaceService.deleteWorkspace(workspaceId, userId);
-    return httpResponse(req, res, 204, 'Workspace deleted successfully');
+
+    if (!Array.isArray(workspaceIds) || workspaceIds.length === 0) {
+      return httpResponse(req, res, 400, 'No workspace IDs provided.', null);
+    }
+
+    await workspaceService.deleteWorkspaces(workspaceIds, userId);
+
+    return httpResponse(req, res, 200, 'Workspaces deleted successfully');
   } catch (error) {
-    logger.error('Error deleting workspace:', error);
+    logger.error('Error deleting workspaces:', error);
     return httpError(next, error, req);
   }
 };
