@@ -12,7 +12,8 @@ router.post('/:workspaceId', authMiddleware, roleRestriction([Role.ADMIN, Role.M
 router.get('/:workspaceId', authMiddleware, getProductsInWorkspace);
 router.put('/:workspaceId/:productId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), updateProduct);
 router.delete('/:workspaceId/:productId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), deleteProduct);
-
+// router.patch('/:workspaceId/products/:productId/stock', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER, Role.STAFF]), updateStockLevel);
+// router.get('/:workspaceId/products/category/:categoryId', authMiddleware, getProductsByCategory);
 router.get('/single/:productId', authMiddleware, getProductById);
 router.get('/slug/:slug', authMiddleware, getProductBySlug);
 router.patch('/:workspaceId/:productId/status', authMiddleware, roleRestriction([Role.ADMIN]), toggleProductStatus);

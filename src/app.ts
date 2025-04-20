@@ -76,6 +76,10 @@ import workspaceRoutes from './routers/workspace.routes'
 import categoryRoutes from './routers/category.routes'
 import productRoutes from './routers/product.routes'
 import OrderRoutes from './routers/order.routes'
+import ReportRoutes from './routers/report.routes'
+import inventoryRoutes from './routers/inventory.routes'
+import notificationRoutes from './routers/notification.routes'
+import billRoutes from './routers/billing.route'
 import dotenv from 'dotenv'
 dotenv.config()
 
@@ -106,6 +110,10 @@ app.use('/api/v1/workspaces', workspaceRoutes);
 app.use('/api/v1/categories', categoryRoutes)
 app.use('/api/v1/products', productRoutes)
 app.use('/api/v1/orders', OrderRoutes)
+app.use('/api/v1/reports', ReportRoutes)
+app.use('/api/v1/inventory', inventoryRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
+app.use("/api/v1/bills", billRoutes);
 
 // 404 Handler
 app.use((req: Request, _: Response, next: NextFunction) => {

@@ -250,7 +250,8 @@ export const getOrdersByUser = async (req: AuthRequest, res: Response, next: Nex
   }
 };
 
-export const getOrdersByDateRange = async (req: AuthRequest, res: Response, next: NextFunction) => {
+// Controller
+export const getOrdersByDateRangeController = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const workspaceId = Number(req.params.workspaceId);
   const { startDate, endDate } = req.query;
   const authUserId = req.user?.userId;
@@ -259,13 +260,21 @@ export const getOrdersByDateRange = async (req: AuthRequest, res: Response, next
     return httpResponse(req, res, 400, 'Invalid workspace ID or date range');
   }
 
+  const start = new Date(startDate as string);
+  const end = new Date(new Date(endDate as string).setHours(23, 59, 59, 999)); // extend end date to full day
+
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    return httpResponse(req, res, 400, 'Invalid date format. Please use a valid ISO date string.');
+  }
+
   try {
-    const orders = await orderService.getOrdersByDateRange(workspaceId, new Date(startDate as string), new Date(endDate as string), authUserId);
+    const orders = await orderService.getOrdersByDateRange(workspaceId, start, end, authUserId);
     return httpResponse(req, res, 200, 'Orders retrieved successfully', orders);
   } catch (error) {
     return httpError(next, error, req);
   }
 };
+
 
 export const bulkUpdateOrders = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const workspaceId = Number(req.params.workspaceId);
@@ -324,17 +333,19 @@ export const reorder = async (req: AuthRequest, res: Response, next: NextFunctio
   const orderId = req.params.orderId;
   const authUserId = req.user?.userId;
 
-  if (isNaN(workspaceId) || !orderId || !authUserId) {
-    return httpResponse(req, res, 400, 'Invalid workspace ID or order ID');
+  // Validate inputs
+  if (!authUserId || !orderId || isNaN(workspaceId)) {
+    return httpResponse(req, res, 400, 'Invalid workspace ID, order ID, or user credentials.');
   }
 
   try {
-    const order = await orderService.reorder(workspaceId, orderId, authUserId);
-    return httpResponse(req, res, 201, 'Order re-created successfully', order);
+    const newOrder = await orderService.reorder(workspaceId, orderId, authUserId);
+    return httpResponse(req, res, 201, 'Order re-created successfully', newOrder);
   } catch (error) {
     return httpError(next, error, req);
   }
 };
+
 
 export const notifyOrderStatus = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const workspaceId = Number(req.params.workspaceId);
@@ -376,7 +387,7 @@ export const getOrderSummary = async (req: AuthRequest, res: Response, next: Nex
   const authUserId = req.user?.userId;
 
   if (isNaN(workspaceId) || !authUserId) {
-    return httpResponse(req, res, 400, 'Invalid workspace ID');
+    return httpResponse(req, res, 400, 'Invalid workspace ID or unauthorized access');
   }
 
   try {

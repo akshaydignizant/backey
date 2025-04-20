@@ -1,9 +1,12 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middleware/auth.middleware';
-import { createOrder, getOrder, getOrders, updateOrder, deleteOrder, addOrderItem, removeOrderItem, updateOrderStatus, getOrdersByStatus, getOrdersByUser, reorder, getOrderSummary, updatePaymentStatus, downloadInvoice, getOrdersByDateRange, bulkUpdateOrders, assignDeliveryPartner, cloneOrder, notifyOrderStatus, getOrderHistory, searchOrders, exportOrders } from '../controllers/order.controller';
+import { createOrder, getOrder, getOrders, updateOrder, deleteOrder, addOrderItem, removeOrderItem, updateOrderStatus, getOrdersByStatus, getOrdersByUser, reorder, getOrderSummary, updatePaymentStatus, downloadInvoice, bulkUpdateOrders, assignDeliveryPartner, cloneOrder, notifyOrderStatus, getOrderHistory, searchOrders, exportOrders, getOrdersByDateRangeController } from '../controllers/order.controller';
 
 const router = Router();
 
+router.post('/workspaces/:workspaceId/orders', authMiddleware, createOrder);
+router.get('/workspaces/:workspaceId/orders', authMiddleware, getOrders);
+router.get('/workspaces/:workspaceId/orders/:orderId', authMiddleware, getOrder);
 router.patch('/workspaces/:workspaceId/orders/:orderId/status', authMiddleware, updateOrderStatus);
 
 router.get('/workspaces/:workspaceId/orders/status/:status', authMiddleware, getOrdersByStatus);
@@ -13,14 +16,6 @@ router.get('/workspaces/:workspaceId/users/:userId/orders', authMiddleware, getO
 router.post('/workspaces/:workspaceId/orders/:orderId/reorder', authMiddleware, reorder);
 // GET /workspaces/:workspaceId/orders/summary
 router.get('/workspaces/:workspaceId/orders/summary', authMiddleware, getOrderSummary);
-// Create a new order
-router.post('/workspaces/:workspaceId/orders', authMiddleware, createOrder);
-
-// Get all orders for a workspace
-router.get('/workspaces/:workspaceId/orders', authMiddleware, getOrders);
-
-// Get a specific order by ID
-router.get('/workspaces/:workspaceId/orders/:orderId', authMiddleware, getOrder);
 
 // Update an order
 router.patch('/workspaces/:workspaceId/orders/:orderId', authMiddleware, updateOrder);
@@ -39,7 +34,7 @@ router.patch('/workspaces/:workspaceId/orders/:orderId/payment-status', authMidd
 router.get('/workspaces/:workspaceId/orders/:orderId/invoice', authMiddleware, downloadInvoice);
 
 // GET /workspaces/:workspaceId/orders/date-range
-router.get('/workspaces/:workspaceId/orders/date-range', authMiddleware, getOrdersByDateRange);
+router.get('/workspaces/:workspaceId/orders/date-range', authMiddleware, getOrdersByDateRangeController);
 
 // PATCH /workspaces/:workspaceId/orders/bulk-update
 router.patch('/workspaces/:workspaceId/orders/bulk-update', authMiddleware, bulkUpdateOrders);

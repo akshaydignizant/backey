@@ -9,32 +9,33 @@ datasource db {
 }
 
 model User {
-  id                  String       @id @default(uuid())
+  id                  String         @id @default(uuid())
   firstName           String
   lastName            String?
-  email               String       @unique
+  email               String         @unique
   password            String
-  phone               String?      @unique
-  role                Role?        @default(ADMIN)
-  status              UserStatus   @default(ACTIVE)
-  termsAccepted       Boolean      @default(false)
-  phoneVerified       Boolean      @default(false)
-  emailVerified       Boolean      @default(false)
-  isActive            Boolean      @default(true)
+  phone               String?        @unique
+  role                Role?          @default(ADMIN)
+  status              UserStatus     @default(ACTIVE)
+  termsAccepted       Boolean        @default(false)
+  phoneVerified       Boolean        @default(false)
+  emailVerified       Boolean        @default(false)
+  isActive            Boolean        @default(true)
   profileImageUrl     String?
   lastLogin           DateTime?
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
   locationId          String?
-  location            Location?    @relation("UserLocation", fields: [locationId], references: [id])
+  location            Location?      @relation("UserLocation", fields: [locationId], references: [id])
   bills               Bill[]
   cart                CartItem[]
-  invitationsSent     Invitation[] @relation("InvitedBy")
-  invitationsReceived Invitation[] @relation("InvitedUser")
+  invitationsSent     Invitation[]   @relation("InvitedBy")
+  invitationsReceived Invitation[]   @relation("InvitedUser")
   orders              Order[]
-  ownedWorkspaces     Workspace[]  @relation("OwnedWorkspaces")
-  workspaces          Workspace[]  @relation("UserWorkspaces")
+  ownedWorkspaces     Workspace[]    @relation("OwnedWorkspaces")
+  workspaces          Workspace[]    @relation("UserWorkspaces")
   Address             Address[]
+  Notification        Notification[]
 
   // Index on email and phone for fast lookup
   @@index([email])
@@ -63,6 +64,7 @@ model Workspace {
   rolePermissions RolePermission[]
   owner           User             @relation("OwnedWorkspaces", fields: [ownerId], references: [id])
   users           User[]           @relation("UserWorkspaces")
+  Notification    Notification[]
 
   // Index on the ownerId for efficient lookup of workspaces owned by a user
   @@index([ownerId])
@@ -263,6 +265,25 @@ model Invitation {
   workspace     Workspace        @relation(fields: [workspaceId], references: [id])
 }
 
+model Notification {
+  id          String           @id @default(uuid())
+  userId      String
+  workspaceId Int
+  title       String
+  message     String
+  type        NotificationType
+  isRead      Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  user        User             @relation(fields: [userId], references: [id])
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id])
+
+  // Indexes for fast queries
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([isRead])
+}
+
 enum Role {
   ADMIN
   MANAGER
@@ -294,4 +315,11 @@ enum OrderStatus {
   PROCESSING
   DELIVERED
   CANCELLED
+}
+
+enum NotificationType {
+  LOW_STOCK
+  ORDER_UPDATE
+  INVITATION
+  SYSTEM
 }

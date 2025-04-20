@@ -1,6 +1,7 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import winston from 'winston';
-import { ProductInput } from '../types/product';
+import { ProductInput, ProductStatsRaw, VariantStatsRaw } from '../types/product';
+import redisClient from '../cache/redisClient';
 
 const prisma = new PrismaClient();
 
@@ -182,13 +183,180 @@ export const productService = {
   },
 
   getProductStats: async (workspaceId: number) => {
-    const [total, active, inactive] = await Promise.all([
-      prisma.product.count({ where: { workspaceId } }),
-      prisma.product.count({ where: { workspaceId, isActive: true } }),
-      prisma.product.count({ where: { workspaceId, isActive: false } }),
+    // Cache key for Redis
+    const cacheKey = `product_stats:${workspaceId}`;
+    const cachedStats = await redisClient.get(cacheKey);
+
+    if (cachedStats) {
+      logger.info(`Cache hit for product stats: ${cacheKey}`);
+      return JSON.parse(cachedStats);
+    }
+
+    // Check if workspace exists (minimal query)
+    const workspaceExists = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { id: true },
+    });
+    if (!workspaceExists) {
+      throw new Error('Workspace not found');
+    }
+
+    // Batch product and variant counts in a single transaction
+    const [productStats, variantStats] = await prisma.$transaction([
+      // Product counts (total, active, inactive)
+      prisma.$queryRaw<ProductStatsRaw[]>`
+        SELECT
+          COUNT(*) FILTER (WHERE "isActive" IS TRUE) AS active,
+          COUNT(*) FILTER (WHERE "isActive" IS FALSE) AS inactive,
+          COUNT(*) AS total
+        FROM "Product"
+        WHERE "workspaceId" = ${workspaceId}
+      `,
+      // Variant counts (total, available, out-of-stock)
+      prisma.$queryRaw<VariantStatsRaw[]>`
+        SELECT
+          COUNT(*) AS total,
+          COUNT(*) FILTER (WHERE "isAvailable" IS TRUE) AS available,
+          COUNT(*) FILTER (WHERE "stock" = 0) AS out_of_stock
+        FROM "ProductVariant"
+        WHERE "productId" IN (
+          SELECT "id" FROM "Product" WHERE "workspaceId" = ${workspaceId}
+        )
+      `,
     ]);
 
-    return { total, active, inactive };
+    // Parse raw query results
+    const { total: totalProducts, active: activeProducts, inactive: inactiveProducts } =
+      productStats[0];
+    const { total: totalVariants, available: availableVariants, out_of_stock: outOfStockVariants } =
+      variantStats[0];
+
+    // Category breakdown (optimized to fetch only necessary fields)
+    const categoryStats = await prisma.category.findMany({
+      where: { workspaceId },
+      select: {
+        id: true,
+        name: true,
+        _count: { select: { products: true } },
+      },
+    });
+    const categoryBreakdown = categoryStats.map((cat) => ({
+      categoryId: cat.id,
+      name: cat.name,
+      productCount: cat._count.products,
+    }));
+
+    // Sales stats (using aggregate for PostgreSQL)
+    const salesStats = await prisma.orderItem.aggregate({
+      where: {
+        order: { workspaceId, status: 'DELIVERED' },
+      },
+      _sum: {
+        quantity: true,
+      },
+      _count: {
+        id: true,
+      },
+    });
+
+    // Calculate total revenue using a raw query for precision
+    const revenueStats = await prisma.$queryRaw<{ total_revenue: number }[]>`
+      SELECT SUM(oi.quantity * oi.price) AS total_revenue
+      FROM "OrderItem" oi
+      JOIN "Order" o ON oi."orderId" = o.id
+      WHERE o."workspaceId" = ${workspaceId} AND o.status = 'DELIVERED'
+    `;
+
+    const sales = {
+      totalRevenue: revenueStats[0]?.total_revenue || 0,
+      totalItemsSold: salesStats._sum.quantity || 0,
+      totalOrders: salesStats._count.id || 0,
+    };
+
+    // Top-selling products (optimized with limit and single query)
+    const topProducts = await prisma.orderItem.groupBy({
+      by: ['variantId'],
+      where: {
+        order: { workspaceId, status: 'DELIVERED' },
+      },
+      _sum: { quantity: true },
+      orderBy: { _sum: { quantity: 'desc' } },
+      take: 5,
+    });
+
+    const topProductsDetails = await prisma.productVariant.findMany({
+      where: { id: { in: topProducts.map((item) => item.variantId) } },
+      select: {
+        id: true,
+        title: true,
+        product: { select: { name: true } },
+      },
+    });
+
+    const topProductsMapped = topProducts.map((item) => {
+      const variant = topProductsDetails.find((v) => v.id === item.variantId);
+      return {
+        productName: variant?.product.name || 'Unknown',
+        variantTitle: variant?.title || 'Unknown',
+        quantitySold: item._sum.quantity || 0,
+      };
+    });
+
+    // Stock stats (single aggregation + low-stock in one query)
+    const stockStats = await prisma.productVariant.aggregate({
+      where: { product: { workspaceId } },
+      _sum: { stock: true },
+    });
+
+    const lowStockVariants = await prisma.productVariant.findMany({
+      where: {
+        product: { workspaceId },
+        stock: { lte: 10 },
+      },
+      select: {
+        id: true,
+        title: true,
+        stock: true,
+        product: { select: { name: true } },
+      },
+      take: 10,
+      orderBy: { stock: 'asc' },
+    });
+
+    const stats = {
+      products: {
+        total: Number(totalProducts),
+        active: Number(activeProducts),
+        inactive: Number(inactiveProducts),
+      },
+      variants: {
+        total: Number(totalVariants),
+        available: Number(availableVariants),
+        outOfStock: Number(outOfStockVariants),
+      },
+      categories: categoryBreakdown,
+      sales: {
+        totalRevenue: sales.totalRevenue,
+        totalItemsSold: sales.totalItemsSold,
+        totalOrders: sales.totalOrders,
+        topProducts: topProductsMapped,
+      },
+      stock: {
+        totalStock: stockStats._sum.stock || 0,
+        lowStock: lowStockVariants.map((v) => ({
+          productName: v.product.name,
+          variantTitle: v.title,
+          stock: v.stock,
+        })),
+      },
+    };
+
+    // Cache stats (expire in 5 minutes)
+    const cacheTtl = 300;
+    await redisClient.setEx(cacheKey, cacheTtl, JSON.stringify(stats));
+    logger.info(`Cached product stats: ${cacheKey}`);
+
+    return stats;
   },
 
   updateVariants: async (productId: string, variants: any[]) => {

@@ -18,3 +18,15 @@ export interface VariantInput {
   color?: string;
   size?: string;
 }
+
+export interface ProductStatsRaw {
+  total: bigint;
+  active: bigint;
+  inactive: bigint;
+}
+
+export interface VariantStatsRaw {
+  total: bigint;
+  available: bigint;
+  out_of_stock: bigint;
+}

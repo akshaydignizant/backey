@@ -1,124 +1,163 @@
 import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+
+// Create a single Prisma client instance and reuse it
+const prisma = new PrismaClient({
+  log: ['error'], // Only log errors to reduce noise
+});
+
+// Cache for workspace existence checks
+const workspaceCache = new Map<number, boolean>();
+
+// Helper function to validate category name
+const validateCategoryName = (name: any): name is string => {
+  return typeof name === 'string' && name.trim().length > 0;
+};
+
+// Helper function to generate slug
+const generateSlug = (name: string): string => {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '');
+};
+
+// Helper function to check workspace existence with caching
+const checkWorkspaceExists = async (workspaceId: number): Promise<void> => {
+  if (workspaceCache.has(workspaceId)) return;
+
+  const exists = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    select: { id: true }, // Only select the ID to minimize data transfer
+  });
+
+  if (!exists) {
+    throw new Error('Workspace not found');
+  }
+
+  workspaceCache.set(workspaceId, true);
+};
 
 // Category Service
 export const categoryService = {
   // Create Category
-  createCategory: async (workspaceId: number, data: any) => {
+  createCategory: async (workspaceId: number, data: { name: string;[key: string]: any }) => {
     try {
       // Validate category name
-      if (!data.name || typeof data.name !== 'string') {
+      if (!validateCategoryName(data.name)) {
         throw new Error('Invalid category name');
       }
 
-      // Check if the workspace exists
-      const workspace = await prisma.workspace.findUnique({
-        where: { id: workspaceId },
+      // Check workspace existence
+      await checkWorkspaceExists(workspaceId);
+
+      const slug = generateSlug(data.name);
+
+      // Use transaction to ensure data consistency
+      return await prisma.$transaction(async (tx) => {
+        // Check for existing category with the same slug in the same workspace
+        const existingCategory = await tx.category.findFirst({
+          where: { slug, workspaceId },
+          select: { id: true }, // Only select what we need
+        });
+
+        if (existingCategory) {
+          throw new Error('A category with this slug already exists in this workspace.');
+        }
+
+        // Create the new category
+        return await tx.category.create({
+          data: {
+            ...data,
+            workspaceId,
+            slug,
+          },
+        });
       });
-
-      if (!workspace) {
-        throw new Error('Workspace not found');
-      }
-
-      // Generate slug from category name
-      const slug = data.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-
-      // Check if a category with the same slug already exists in the same workspace
-      const existingCategory = await prisma.category.findUnique({
-        where: { slug },
-      });
-
-      if (existingCategory) {
-        throw new Error('A category with this slug already exists.');
-      }
-
-      // Create the new category
-      const createdCategory = await prisma.category.create({
-        data: {
-          ...data,
-          workspaceId,
-          slug,
-        },
-      });
-
-      return createdCategory;
     } catch (error: any) {
-      console.error('❌ Error creating category:', error);
-      throw new Error(error.message || 'Failed to create category');
+      console.error('Error creating category:', error.message);
+      throw error; // Re-throw the original error to preserve stack trace
     }
   },
 
-
-  // Get Categories in a Workspace
+  // Get Categories in a Workspace (optimized query)
   getCategoriesInWorkspace: async (workspaceId: number) => {
     try {
+      await checkWorkspaceExists(workspaceId);
 
-      // Check if the workspace exists
-      const workspace = await prisma.workspace.findUnique({
-        where: { id: workspaceId },
-      });
-
-      if (!workspace) {
-        throw new Error('Workspace not found');
-      }
-      const categories = await prisma.category.findMany({
+      // Use select to only get the fields we need
+      return await prisma.category.findMany({
         where: { workspaceId },
-        include: {
-          children: true,
-          products: true,
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          description: true,
+          parentId: true,
+          workspaceId: true,
+          children: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+            },
+          },
+          products: {
+            select: {
+              id: true,
+              name: true,
+            },
+            take: 10, // Limit the number of products returned
+          },
+        },
+        orderBy: {
+          name: 'asc', // Consistent ordering
         },
       });
-
-      return categories;
     } catch (error: any) {
-      console.error('❌ Error fetching categories:', error);
-      throw new Error(error.message || 'Failed to fetch categories');
+      console.error('Error fetching categories:', error.message);
+      throw error;
     }
   },
 
-  // Update Category
-  updateCategory: async (categoryId: string, data: any) => {
+  // Update Category (optimized)
+  updateCategory: async (categoryId: string, data: Partial<{ name: string;[key: string]: any }>) => {
     try {
+      // Only update slug if name is being changed
+      const updateData = data.name
+        ? { ...data, slug: generateSlug(data.name) }
+        : data;
 
-      const existingCategory = await prisma.category.findUnique({
+      return await prisma.category.update({
         where: { id: categoryId },
+        data: updateData,
       });
-
-      if (!existingCategory) {
+    } catch (error: any) {
+      if (error.code === 'P2025') { // Prisma not found error code
         throw new Error(`Category with ID ${categoryId} not found`);
       }
-
-      const updatedCategory = await prisma.category.update({
-        where: { id: categoryId },
-        data,
-      });
-
-      return updatedCategory;
-    } catch (error: any) {
-      console.error('❌ Error updating category:', error);
-      throw new Error(error.message || 'Failed to update category');
+      console.error('Error updating category:', error.message);
+      throw error;
     }
   },
 
-  // Delete Category
+  // Delete Category (optimized)
   deleteCategory: async (categoryId: string) => {
     try {
-      const existingCategory = await prisma.category.findUnique({
+      return await prisma.category.delete({
         where: { id: categoryId },
       });
-
-      if (!existingCategory) {
+    } catch (error: any) {
+      if (error.code === 'P2025') { // Prisma not found error code
         throw new Error(`Category with ID ${categoryId} not found`);
       }
-
-      const deletedCategory = await prisma.category.delete({
-        where: { id: categoryId },
-      });
-
-      return deletedCategory;
-    } catch (error: any) {
-      console.error('❌ Error deleting category:', error);
-      throw new Error(error.message || 'Failed to delete category');
+      console.error('Error deleting category:', error.message);
+      throw error;
     }
   },
 };
+
+// Optional: Add cleanup for the Prisma client on process exit
+process.on('beforeExit', async () => {
+  await prisma.$disconnect();
+});
