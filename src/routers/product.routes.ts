@@ -1,16 +1,17 @@
 
 import { Router } from 'express';
 import { authMiddleware } from '../middleware/auth.middleware';
-import { bulkUploadProducts, checkSlugAvailability, createProduct, deleteProduct, getProductById, getProductBySlug, getProductsInWorkspace, getProductStats, getProductVariants, searchProducts, toggleProductStatus, updateProduct, updateVariants } from '../controllers/product.controller';
+import { bulkDeleteProducts, bulkUploadProducts, checkSlugAvailability, createProduct, deleteProduct, getProductById, getProductBySlug, getProductsInWorkspace, getProductStats, getProductVariants, searchProducts, toggleProductStatus, updateProduct, updateVariants } from '../controllers/product.controller';
 import { Role } from '@prisma/client';
 import roleRestriction from '../middleware/roleRestriction';
 
 const router = Router();
 
 // /routes/productRoutes.ts
-router.post('/:workspaceId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), createProduct);
+router.post('/:workspaceId/:categoryId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), createProduct);
 router.get('/:workspaceId', authMiddleware, getProductsInWorkspace);
 router.put('/:workspaceId/:productId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), updateProduct);
+router.delete('/products/:workspaceId', authMiddleware, roleRestriction([Role.ADMIN]), bulkDeleteProducts);
 router.delete('/:workspaceId/:productId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), deleteProduct);
 // router.patch('/:workspaceId/products/:productId/stock', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER, Role.STAFF]), updateStockLevel);
 // router.get('/:workspaceId/products/category/:categoryId', authMiddleware, getProductsByCategory);

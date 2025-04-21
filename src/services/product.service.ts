@@ -15,13 +15,27 @@ const logger = winston.createLogger({
 });
 
 export const productService = {
-  createProduct: async (workspaceId: number, data: ProductInput) => {
+  createProduct: async (workspaceId: number, categoryId: string, data: ProductInput) => {
     try {
-      if (!workspaceId || !data.name?.trim()) {
-        throw new Error('Invalid workspaceId or product name');
+      // Validation
+      if (!workspaceId) {
+        throw new Error('Invalid workspaceId');
       }
 
-      const slug = data.name.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      if (!categoryId) {
+        throw new Error('Invalid categoryId');
+      }
+
+      if (!data.name?.trim()) {
+        throw new Error('Invalid product name');
+      }
+
+      // Slugify product name
+      const slug = data.name
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9-]/g, '');
 
       const { variants, ...productData } = data;
 
@@ -29,6 +43,7 @@ export const productService = {
         data: {
           ...productData,
           workspaceId,
+          categoryId,
           slug,
           images: productData.images ?? [],
           variants: variants?.length
@@ -57,17 +72,33 @@ export const productService = {
       throw new Error('Failed to create product');
     }
   },
-  getProductsInWorkspace: async (workspaceId: number) => {
+  getProductsInWorkspace: async (workspaceId: number, page: number = 1, pageSize: number = 10) => {
     try {
       if (!workspaceId) throw new Error('Invalid workspaceId');
 
-      return await prisma.product.findMany({
+      const products = await prisma.product.findMany({
         where: { workspaceId },
-        include: {
-          category: true,
-          variants: true,
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          description: true,
+          images: true,
+          isActive: true,
+          // categoryId: true,
+          // workspaceId: true,
+          createdAt: true,
+          updatedAt: true,
         },
+        // include: {
+        //   category: true,  // Include category details
+        //   variants: true,  // Include variant details
+        // },
+        skip: (page - 1) * pageSize, // Pagination: skip products based on current page
+        take: pageSize, // Limit the number of products per page
       });
+
+      return products;
     } catch (error) {
       logger.error('Error fetching products:', error);
       throw new Error('Failed to fetch products');
@@ -138,6 +169,47 @@ export const productService = {
       throw new Error('Failed to delete product');
     }
   },
+  bulkDeleteProducts: async (workspaceId: number, productIds: string[]) => {
+    try {
+      if (!workspaceId || !Array.isArray(productIds) || productIds.length === 0) {
+        throw new Error('Invalid workspaceId or productIds');
+      }
+
+      // Fetch the products to ensure they exist and belong to the given workspace
+      const products = await prisma.product.findMany({
+        where: {
+          id: { in: productIds },  // Find products by the given productIds
+          workspaceId: workspaceId, // Ensure they belong to the correct workspace
+        },
+        include: { variants: true },
+      });
+
+      if (products.length === 0) {
+        throw new Error('No products found or products do not belong to the workspace');
+      }
+
+      // Delete all variants for the given products
+      await prisma.productVariant.deleteMany({
+        where: {
+          productId: { in: productIds },
+        },
+      });
+
+      // Delete the products
+      const deletedProducts = await prisma.product.deleteMany({
+        where: {
+          id: { in: productIds },
+          workspaceId: workspaceId,
+        },
+      });
+
+      return deletedProducts;
+    } catch (error) {
+      logger.error('Error deleting products: ', error);
+      throw new Error('Failed to delete products');
+    }
+  },
+
   getProductById: async (productId: string) => {
     try {
       if (!productId) throw new Error('Invalid productId');
@@ -373,8 +445,15 @@ export const productService = {
     });
   },
 
-  bulkUploadProducts: async (workspaceId: number, products: ProductInput[]) => {
-    const created = await Promise.all(products.map((p) => productService.createProduct(workspaceId, p)));
+  bulkUploadProducts: async (
+    workspaceId: number,
+    products: (ProductInput & { categoryId: string })[]
+  ) => {
+    const created = await Promise.all(
+      products.map((p) =>
+        productService.createProduct(workspaceId, p.categoryId, p)
+      )
+    );
     return created;
   },
 

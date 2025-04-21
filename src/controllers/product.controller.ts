@@ -5,9 +5,21 @@ import httpError from '../util/httpError';
 import httpResponse from '../util/httpResponse';
 
 export const createProduct = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  const { workspaceId } = req.params;
+  const { workspaceId, categoryId } = req.params;
+
   try {
-    const product = await productService.createProduct(Number(workspaceId), req.body);
+    const numericWorkspaceId = Number(workspaceId);
+
+    if (isNaN(numericWorkspaceId)) {
+      throw new Error('workspaceId must be a number');
+    }
+
+    const product = await productService.createProduct(
+      numericWorkspaceId,
+      categoryId,
+      req.body
+    );
+
     httpResponse(req, res, 201, 'Product created', product);
   } catch (err) {
     return httpError(next, err, req, 400);
@@ -16,9 +28,12 @@ export const createProduct = async (req: Request, res: Response, next: NextFunct
 
 export const getProductsInWorkspace = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { workspaceId } = req.params;
+  const page = parseInt(req.query.page as string) || 1;  // Default to page 1
+  const pageSize = parseInt(req.query.pageSize as string) || 10;  // Default to 10 products per page
+
   try {
-    const products = await productService.getProductsInWorkspace(Number(workspaceId));
-    return httpResponse(req, res, 200, 'Product fetched', products);
+    const products = await productService.getProductsInWorkspace(Number(workspaceId), page, pageSize);
+    return httpResponse(req, res, 200, 'Products fetched', products);
   } catch (err) {
     return httpError(next, err, req);
   }
@@ -43,6 +58,23 @@ export const deleteProduct = async (req: Request, res: Response, next: NextFunct
     return httpError(next, err, req, 400);
   }
 };
+
+export const bulkDeleteProducts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const { workspaceId } = req.params;
+  const { productIds } = req.body;  // Expecting an array of product IDs in the body
+
+  try {
+    if (!Array.isArray(productIds) || productIds.length === 0) {
+      return httpError(next, new Error('Product IDs array is required'), req, 400);
+    }
+
+    await productService.bulkDeleteProducts(Number(workspaceId), productIds);
+    return httpResponse(req, res, 204, 'Products deleted successfully');
+  } catch (err) {
+    return httpError(next, err, req, 400);
+  }
+};
+
 
 export const getProductById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -94,15 +126,37 @@ export const updateVariants = async (req: Request, res: Response, next: NextFunc
   }
 };
 
-export const bulkUploadProducts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const bulkUploadProducts = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  const { workspaceId } = req.params;
+
   try {
-    const { workspaceId } = req.params;
-    const products = await productService.bulkUploadProducts(Number(workspaceId), req.body.products);
-    return httpResponse(req, res, 201, 'Bulk products created', products);
+    const numericWorkspaceId = Number(workspaceId);
+
+    if (isNaN(numericWorkspaceId)) {
+      throw new Error('workspaceId must be a number');
+    }
+
+    const products = req.body;
+
+    if (!Array.isArray(products) || products.length === 0) {
+      throw new Error('Product list is empty or invalid');
+    }
+
+    const createdProducts = await productService.bulkUploadProducts(
+      numericWorkspaceId,
+      products
+    );
+
+    httpResponse(req, res, 201, 'Products uploaded successfully', createdProducts);
   } catch (err) {
     return httpError(next, err, req, 400);
   }
 };
+
 
 export const searchProducts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
