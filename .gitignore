@@ -5,3 +5,4 @@ dist
 .env.production
 prisma/generated
 seed
+error.log

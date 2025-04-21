@@ -5,7 +5,12 @@ import httpError from '../util/httpError';
 import httpResponse from '../util/httpResponse';
 
 export const createProduct = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  const { workspaceId, categoryId } = req.params;
+  const { categoryId } = req.params;
+  const workspaceId = parseInt(req.params.workspaceId);
+
+  if (isNaN(workspaceId)) {
+    return httpResponse(req, res, 400, 'Invalid workspaceId');
+  }
 
   try {
     const numericWorkspaceId = Number(workspaceId);

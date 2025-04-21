@@ -1,7 +1,7 @@
 // modules/billing/controllers/bill.controller.ts
 
 import { Request, Response } from "express";
-import { billService } from "../services/billing.services";
+import { billService } from "../services/billing.service";
 
 export const billController = {
     // Create a new bill

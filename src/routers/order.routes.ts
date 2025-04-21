@@ -49,7 +49,7 @@ router.get('/workspaces/:workspaceId/orders/:orderId/history', authMiddleware, g
 // GET /workspaces/:workspaceId/orders/search
 router.get('/workspaces/:workspaceId/orders/search', authMiddleware, searchOrders);
 // GET /workspaces/:workspaceId/orders/export
-router.get('/workspaces/:workspaceId/orders/export', authMiddleware, exportOrders);
+router.get('/workspaces/:workspaceId/orders/:orderId/export', authMiddleware, exportOrders);
 
 
 export default router;

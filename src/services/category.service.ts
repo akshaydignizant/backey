@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { generateSlug } from '../util/slugGenerator';
 
 // Create a single Prisma client instance and reuse it
 const prisma = new PrismaClient({
@@ -14,13 +15,6 @@ const validateCategoryName = (name: any): name is string => {
 };
 
 // Helper function to generate slug
-const generateSlug = (name: string): string => {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9-]/g, '');
-};
 
 // Helper function to check workspace existence with caching
 const checkWorkspaceExists = async (workspaceId: number): Promise<void> => {

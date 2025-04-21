@@ -6,10 +6,10 @@ import { billController } from "../controllers/billing.controller";
 const router = Router();
 
 // Route to create a new bill
-router.post("/bills", billController.createBill);
+router.post("/", billController.createBill);
 
 // Route to get a specific bill by its ID
-router.get("/bills/:billId", billController.getBillById);
+router.get("/:billId", billController.getBillById);
 
 // Route to update the status of a bill (e.g., marking it as paid)
 // router.patch("/bills/:billId/status", billController.updateBillStatus);
@@ -18,15 +18,11 @@ router.get("/bills/:billId", billController.getBillById);
 router.get("/users/:userId/bills", billController.getBillsByUser);
 
 // Route to get all bill items associated with a specific bill
-router.get("/bills/:billId/items", billController.getBillItemsByBill);
+router.get("/:billId/items", billController.getBillItemsByBill);
 
-
-// router.post("/", billController.createBill);
 // router.get("/", billController.getAllBills);
-// router.get("/:billId", billController.getBillById);
 // router.put("/:billId", billController.updateBill);
 // router.delete("/:billId", billController.deleteBill);
-// router.get("/user/:userId", billController.getBillsByUser);
 
 // // Bill items routes
 // router.get("/:billId/items", billController.getBillItemsByBill);

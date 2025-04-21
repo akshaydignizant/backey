@@ -9,33 +9,34 @@ datasource db {
 }
 
 model User {
-  id                  String         @id @default(uuid())
+  id                  String               @id @default(uuid())
   firstName           String
   lastName            String?
-  email               String         @unique
+  email               String               @unique
   password            String
-  phone               String?        @unique
-  role                Role?          @default(ADMIN)
-  status              UserStatus     @default(ACTIVE)
-  termsAccepted       Boolean        @default(false)
-  phoneVerified       Boolean        @default(false)
-  emailVerified       Boolean        @default(false)
-  isActive            Boolean        @default(true)
+  phone               String?              @unique
+  role                Role?                @default(ADMIN)
+  status              UserStatus           @default(ACTIVE)
+  termsAccepted       Boolean              @default(false)
+  phoneVerified       Boolean              @default(false)
+  emailVerified       Boolean              @default(false)
+  isActive            Boolean              @default(true)
   profileImageUrl     String?
   lastLogin           DateTime?
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
   locationId          String?
-  location            Location?      @relation("UserLocation", fields: [locationId], references: [id])
+  location            Location?            @relation("UserLocation", fields: [locationId], references: [id])
   bills               Bill[]
   cart                CartItem[]
-  invitationsSent     Invitation[]   @relation("InvitedBy")
-  invitationsReceived Invitation[]   @relation("InvitedUser")
+  invitationsSent     Invitation[]         @relation("InvitedBy")
+  invitationsReceived Invitation[]         @relation("InvitedUser")
   orders              Order[]
-  ownedWorkspaces     Workspace[]    @relation("OwnedWorkspaces")
-  workspaces          Workspace[]    @relation("UserWorkspaces")
+  ownedWorkspaces     Workspace[]          @relation("OwnedWorkspaces")
+  workspaces          Workspace[]          @relation("UserWorkspaces")
   Address             Address[]
   Notification        Notification[]
+  OrderStatusHistory  OrderStatusHistory[]
 
   // Index on email and phone for fast lookup
   @@index([email])
@@ -145,6 +146,20 @@ model ProductVariant {
   @@index([productId]) // Index for fetching variants for a specific product
 }
 
+model OrderStatusHistory {
+  id        String      @id @default(uuid())
+  orderId   String
+  status    OrderStatus
+  note      String?
+  changedBy String
+  createdAt DateTime    @default(now())
+
+  order       Order @relation(fields: [orderId], references: [id])
+  changedUser User  @relation(fields: [changedBy], references: [id])
+
+  @@index([orderId])
+}
+
 model Category {
   id          String     @id @default(uuid())
   name        String
@@ -164,23 +179,24 @@ model Category {
 }
 
 model Order {
-  id                String        @id @default(uuid())
-  userId            String
-  shippingAddressId String
-  billingAddressId  String
-  workspaceId       Int
-  paymentMethod     PaymentMethod
-  totalAmount       Float
-  status            OrderStatus   @default(PENDING)
-  notes             String?
-  placedAt          DateTime      @default(now())
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-  billingAddress    Address       @relation("BillingAddress", fields: [billingAddressId], references: [id])
-  shippingAddress   Address       @relation("ShippingAddress", fields: [shippingAddressId], references: [id])
-  user              User          @relation(fields: [userId], references: [id])
-  workspace         Workspace     @relation(fields: [workspaceId], references: [id])
-  items             OrderItem[]
+  id                 String               @id @default(uuid())
+  userId             String
+  shippingAddressId  String
+  billingAddressId   String
+  workspaceId        Int
+  paymentMethod      PaymentMethod
+  totalAmount        Float
+  status             OrderStatus          @default(PENDING)
+  notes              String?
+  placedAt           DateTime             @default(now())
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  billingAddress     Address              @relation("BillingAddress", fields: [billingAddressId], references: [id])
+  shippingAddress    Address              @relation("ShippingAddress", fields: [shippingAddressId], references: [id])
+  user               User                 @relation(fields: [userId], references: [id])
+  workspace          Workspace            @relation(fields: [workspaceId], references: [id])
+  items              OrderItem[]
+  OrderStatusHistory OrderStatusHistory[]
 
   // Indexes to optimize query filtering by workspaceId and order status
   @@index([workspaceId])

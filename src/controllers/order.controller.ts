@@ -184,14 +184,14 @@ export const removeOrderItem = async (req: AuthRequest, res: Response, next: Nex
 export const updateOrderStatus = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const workspaceId = Number(req.params.workspaceId);
   const orderId = req.params.orderId;
-  const { status } = req.body;
+  const { status, note } = req.body;
   const authUserId = req.user?.userId;
   if (isNaN(workspaceId) || !orderId || !status || !authUserId) {
     return httpResponse(req, res, 400, 'Invalid workspace ID, order ID, or status');
   }
 
   try {
-    const order = await orderService.updateOrderStatus(workspaceId, orderId, status, authUserId);
+    const order = await orderService.updateOrderStatus(workspaceId, orderId, status, authUserId, note);
     return httpResponse(req, res, 200, 'Order status updated successfully', order);
   } catch (error) {
     return httpError(next, error, req);

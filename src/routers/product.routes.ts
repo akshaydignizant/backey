@@ -4,6 +4,7 @@ import { authMiddleware } from '../middleware/auth.middleware';
 import { bulkDeleteProducts, bulkUploadProducts, checkSlugAvailability, createProduct, deleteProduct, getProductById, getProductBySlug, getProductsInWorkspace, getProductStats, getProductVariants, searchProducts, toggleProductStatus, updateProduct, updateVariants } from '../controllers/product.controller';
 import { Role } from '@prisma/client';
 import roleRestriction from '../middleware/roleRestriction';
+import variantController from '../controllers/variant.controller';
 
 const router = Router();
 
@@ -24,5 +25,10 @@ router.post('/:workspaceId/bulk', authMiddleware, roleRestriction([Role.ADMIN]),
 router.get('/:workspaceId/search', authMiddleware, searchProducts);
 router.get('/:workspaceId/check-slug/:slug', authMiddleware, checkSlugAvailability);
 router.get('/:workspaceId/:productId/variants', authMiddleware, getProductVariants);
+
+router.post('/:workspaceId/products/:productId/variants', roleRestriction([Role.ADMIN, Role.MANAGER]), variantController.addVariants);
+router.put('/:productId/variants/:variantId', roleRestriction([Role.ADMIN, Role.MANAGER]), variantController.updateVariants);
+router.delete('/:productId/variants/:variantId', roleRestriction([Role.ADMIN, Role.MANAGER]), variantController.deleteVariant);
+router.get('/variants/:productId', roleRestriction([Role.ADMIN, Role.MANAGER, Role.STAFF]), variantController.getVariantsByProduct);
 
 export default router;

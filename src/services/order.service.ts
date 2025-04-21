@@ -498,16 +498,47 @@ export const removeOrderItem = async (workspaceId: number, orderId: string, item
   });
 };
 
-export const updateOrderStatus = async (workspaceId: number, orderId: string, status: OrderStatus, authUserId: string) => {
+export const updateOrderStatus = async (
+  workspaceId: number,
+  orderId: string,
+  status: OrderStatus,
+  authUserId: string,
+  note?: string
+) => {
   await checkPermission(workspaceId, authUserId, 'UPDATE_ORDER_STATUS');
-  const order = await prisma.order.findUnique({ where: { id: orderId, workspaceId } });
+
+  const order = await prisma.order.findUnique({
+    where: { id: orderId, workspaceId },
+    select: { id: true, status: true },
+  });
+
   if (!order) throw new Error('Order not found');
 
-  return prisma.order.update({
-    where: { id: orderId },
-    data: { status },
-    // include: { items: true, user: true, shippingAddress: true, billingAddress: true },
-  });
+  if (order.status === status) {
+    throw new Error('Order is already in the specified status.');
+  }
+
+  // Start a transaction to ensure both update and history insert happen together
+  const [updatedOrder] = await prisma.$transaction([
+    prisma.order.update({
+      where: { id: orderId },
+      data: { status },
+    }),
+    prisma.orderStatusHistory.create({
+      data: {
+        orderId,
+        status,
+        note,
+        changedBy: authUserId,
+      },
+    }),
+  ]);
+
+  return {
+    id: updatedOrder.id,
+    status: updatedOrder.status,
+    message: `Order status updated to ${updatedOrder.status}`,
+  };
 };
 
 export const updatePaymentStatus = async (workspaceId: number, orderId: string, paymentMethod: PaymentMethod, authUserId: string) => {
@@ -765,16 +796,36 @@ export const notifyOrderStatus = async (
   }
 };
 
-export const getOrderHistory = async (workspaceId: number, orderId: string, authUserId: string) => {
+export const getOrderHistory = async (
+  workspaceId: number,
+  orderId: string,
+  authUserId: string
+) => {
   await checkPermission(workspaceId, authUserId, 'VIEW_ORDERS');
-  const order = await prisma.order.findUnique({ where: { id: orderId, workspaceId } });
+
+  const order = await prisma.order.findUnique({
+    where: { id: orderId, workspaceId },
+    select: { id: true },
+  });
+
   if (!order) throw new Error('Order not found');
 
-  // Assuming a history table or audit log; here we return basic changes
-  return [
-    { timestamp: order.createdAt, action: 'Order Created', details: `Status: ${order.status}` },
-    { timestamp: order.updatedAt, action: 'Order Updated', details: `Status: ${order.status}` },
-  ];
+  const history = await prisma.orderStatusHistory.findMany({
+    where: { orderId },
+    orderBy: { createdAt: 'asc' },
+    include: {
+      changedUser: {
+        select: { id: true, firstName: true, lastName: true, email: true },
+      },
+    },
+  });
+
+  return history.map(entry => ({
+    timestamp: entry.createdAt,
+    status: entry.status,
+    changedBy: `${entry.changedUser.firstName} ${entry.changedUser.lastName}`,
+    note: entry.note,
+  }));
 };
 
 export const getOrderSummary = async (workspaceId: number, authUserId: string) => {
