@@ -172,6 +172,24 @@ export const workspaceService = {
       }),
     ]);
   },
+  deleteWorkspaceById: async (workspaceId: number, userId: string): Promise<void> => {
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+    });
+
+    if (!workspace) {
+      throw new Error('Workspace not found.');
+    }
+
+    if (workspace.ownerId !== userId) {
+      throw new Error('You are not authorized to delete this workspace.');
+    }
+
+    await prisma.workspace.delete({
+      where: { id: workspaceId },
+    });
+  },
+
   removeUserFromWorkspace: async (
     workspaceId: number,
     email: string,

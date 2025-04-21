@@ -138,7 +138,7 @@ export const removeUserFromWorkspace = async (req: Request, res: Response, next:
 };
 
 // Delete Workspace
-export const deleteWorkspace = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const allDeleteWorkspace = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const workspaceIds: number[] = req.body.workspaceIds;
     const userId = req.user?.userId;
@@ -160,12 +160,34 @@ export const deleteWorkspace = async (req: Request, res: Response, next: NextFun
   }
 };
 
+export const deleteWorkspaceById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const workspaceId = parseInt(req.params.id, 10);
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      return httpError(next, new Error('Unauthorized: missing user ID'), req);
+    }
+
+    if (isNaN(workspaceId)) {
+      return httpResponse(req, res, 400, 'Invalid workspace ID.');
+    }
+
+    await workspaceService.deleteWorkspaceById(workspaceId, userId);
+
+    return httpResponse(req, res, 200, 'Workspace deleted successfully.');
+  } catch (error) {
+    logger.error('Error deleting workspace by ID:', error);
+    return httpError(next, error, req);
+  }
+};
+
+
 
 export const getAdminWorkspaces = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId;
     const workspaces = await workspaceService.getAdminWorkspaces(userId as string);
-
     res.status(200).json({
       success: true,
       data: workspaces,

@@ -121,40 +121,81 @@ export const categoryService = {
   },
 
   // Update Category (optimized)
-  updateCategory: async (categoryId: string, data: Partial<{ name: string;[key: string]: any }>) => {
+  updateCategory: async (
+    categoryId: string,
+    workspaceId: number,
+    data: Partial<{ name: string; description?: string }>
+  ) => {
     try {
-      // Only update slug if name is being changed
+      // Optional slug regeneration
       const updateData = data.name
         ? { ...data, slug: generateSlug(data.name) }
         : data;
 
-      return await prisma.category.update({
-        where: { id: categoryId },
+      // Update only if the category belongs to the specified workspace
+      const updated = await prisma.category.updateMany({
+        where: {
+          id: categoryId,
+          workspaceId: workspaceId,
+        },
         data: updateData,
       });
-    } catch (error: any) {
-      if (error.code === 'P2025') { // Prisma not found error code
-        throw new Error(`Category with ID ${categoryId} not found`);
+
+      if (updated.count === 0) {
+        throw new Error(
+          `Category with ID ${categoryId} not found in workspace ${workspaceId}`
+        );
       }
+
+      // Return updated category
+      return await prisma.category.findUnique({
+        where: { id: categoryId },
+      });
+    } catch (error: any) {
       console.error('Error updating category:', error.message);
       throw error;
     }
   },
-
-  // Delete Category (optimized)
-  deleteCategory: async (categoryId: string) => {
+  deleteCategory: async (categoryId: string, workspaceId: number) => {
     try {
-      return await prisma.category.delete({
-        where: { id: categoryId },
+      // Check if any products are linked to this category
+      const linkedProductsCount = await prisma.product.count({
+        where: {
+          categoryId,
+          workspaceId,
+        },
       });
-    } catch (error: any) {
-      if (error.code === 'P2025') { // Prisma not found error code
-        throw new Error(`Category with ID ${categoryId} not found`);
+
+      if (linkedProductsCount > 0) {
+        throw new Error(
+          `Cannot delete category. It is associated with ${linkedProductsCount} product(s). Please remove or reassign them first.`
+        );
       }
+
+      // Safe to delete if no products are linked
+      const deleted = await prisma.category.deleteMany({
+        where: {
+          id: categoryId,
+          workspaceId,
+        },
+      });
+
+      if (deleted.count === 0) {
+        throw new Error(
+          `Category with ID ${categoryId} not found in workspace ${workspaceId}`
+        );
+      }
+
+      return {
+        success: true,
+        message: `Category with ID ${categoryId} deleted successfully.`,
+      };
+    } catch (error: any) {
       console.error('Error deleting category:', error.message);
       throw error;
     }
-  },
+  }
+
 };
 
 // Optional: Add cleanup for the Prisma client on process exit

@@ -38,30 +38,33 @@ export const getCategoriesInWorkspace = async (req: Request, res: Response, next
 
 // Update Category
 export const updateCategory = async (req: Request, res: Response, next: NextFunction) => {
-  const { categoryId } = req.params;
+  const { categoryId, workspaceId } = req.params;
+
   try {
-    if (!categoryId) {
-      return httpResponse(req, res, 400, 'Invalid categoryId');
+    if (!categoryId || !workspaceId) {
+      return httpResponse(req, res, 400, 'Invalid categoryId or workspaceId');
     }
 
-    const updatedCategory = await categoryService.updateCategory(categoryId, req.body);
+    const updatedCategory = await categoryService.updateCategory(categoryId, Number(workspaceId), req.body);
     return httpResponse(req, res, 200, 'Category updated successfully', updatedCategory);
   } catch (err) {
     return httpError(next, err, req);
   }
 };
 
+
 // Delete Category
 export const deleteCategory = async (req: Request, res: Response, next: NextFunction) => {
-  const { categoryId } = req.params;
+  const { categoryId, workspaceId } = req.params;
   try {
-    if (!categoryId) {
-      return httpResponse(req, res, 400, 'Invalid categoryId');
+    if (!categoryId || !workspaceId) {
+      return httpResponse(req, res, 400, 'Invalid categoryId or workspaceId');
     }
 
-    const deletedCategory = await categoryService.deleteCategory(categoryId);
-    return httpResponse(req, res, 204, 'Category deleted successfully', deletedCategory); // No content, successful deletion
+    const deletedCategory = await categoryService.deleteCategory(categoryId, Number(workspaceId));
+    return httpResponse(req, res, 200, 'Category deleted successfully', deletedCategory);
   } catch (err) {
     return httpError(next, err, req);
   }
 };
+
