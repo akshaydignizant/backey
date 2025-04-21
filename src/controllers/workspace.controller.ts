@@ -162,7 +162,7 @@ export const allDeleteWorkspace = async (req: Request, res: Response, next: Next
 
 export const deleteWorkspaceById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const workspaceId = parseInt(req.params.id, 10);
+    const workspaceId = parseInt(req.params.workspaceId);
     const userId = req.user?.userId;
 
     if (!userId) {

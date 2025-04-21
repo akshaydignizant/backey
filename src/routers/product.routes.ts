@@ -9,7 +9,7 @@ const router = Router();
 
 // /routes/productRoutes.ts
 router.post('/:workspaceId/:categoryId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), createProduct);
-router.get('/:workspaceId', authMiddleware, getProductsInWorkspace);
+router.get('/:workspaceId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER, Role.STAFF]), getProductsInWorkspace);
 router.put('/:workspaceId/:productId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), updateProduct);
 router.delete('/products/:workspaceId', authMiddleware, roleRestriction([Role.ADMIN]), bulkDeleteProducts);
 router.delete('/:workspaceId/:productId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), deleteProduct);
