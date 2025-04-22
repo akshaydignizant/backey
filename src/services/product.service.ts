@@ -74,33 +74,36 @@ export const productService = {
   },
   getProductsInWorkspace: async (workspaceId: number, page: number = 1, pageSize: number = 10) => {
     try {
-      if (!workspaceId) throw new Error('Invalid workspaceId');
+      if (!workspaceId || workspaceId <= 0) {
+        throw new Error('Invalid workspaceId');
+      }
+
+      // Add logging to indicate the start of the query and workspaceId
+      logger.info(`Fetching products for workspaceId: ${workspaceId}, Page: ${page}, PageSize: ${pageSize}`);
 
       const products = await prisma.product.findMany({
         where: { workspaceId },
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          description: true,
-          images: true,
-          isActive: true,
-          // categoryId: true,
-          // workspaceId: true,
-          createdAt: true,
-          updatedAt: true,
+        include: {
+          category: {
+            select: {
+              id: true,  // Only include id and name in the category
+              name: true,
+            },
+          },
+          // variants: true,
         },
-        // include: {
-        //   category: true,  // Include category details
-        //   variants: true,  // Include variant details
-        // },
         skip: (page - 1) * pageSize, // Pagination: skip products based on current page
         take: pageSize, // Limit the number of products per page
       });
 
+      if (!products || products.length === 0) {
+        logger.warn(`No products found for workspaceId: ${workspaceId}`);
+      }
+
       return products;
     } catch (error) {
-      logger.error('Error fetching products:', error);
+      // Log the error with more context
+      logger.error(`Error fetching products for workspaceId: ${workspaceId}. Error: ${error}`);
       throw new Error('Failed to fetch products');
     }
   },
