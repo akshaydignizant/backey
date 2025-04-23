@@ -119,37 +119,26 @@ export const workspaceService = {
 
     return response;
   },
-  updateWorkspace: async (workspaceId: number, userId: string, data: Partial<WorkspaceInput>) => {
-    // Check if the user is an ADMIN in this workspace
-    const userRole = await prisma.userRole.findFirst({
-      where: {
-        userId,
-        workspaceId,
-        role: Role.ADMIN,
-      },
-    });
 
-    if (!userRole) {
-      throw new Error('Unauthorized: Only admins can update this workspace');
-    }
-    console.log("dfgdG", data.closingTime);
-
-    const workspace = await prisma.workspace.update({
-      where: { id: workspaceId },
-      data,
-      include: {
-        owner: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
+  updateWorkspace: async (
+    workspaceId: number,
+    userId: string,
+    data: Partial<WorkspaceInput>
+  ) => {
+    try {
+      return await prisma.workspace.update({
+        where: {
+          id: workspaceId,
+          ownerId: userId
         },
-      },
-    });
-
-    return workspace;
+        data,
+        include: {
+          owner: true
+        }
+      });
+    } catch (error) {
+      throw new Error('Unauthorized or workspace not found');
+    }
   },
 
   deleteWorkspaces: async (workspaceIds: number[], userId: string) => {
