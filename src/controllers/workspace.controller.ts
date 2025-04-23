@@ -83,24 +83,34 @@ export const getWorkspacesByUserId = async (req: Request, res: Response): Promis
 // Update Workspace
 export const updateWorkspace = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const workspaceId = parseInt(req.params.workspaceId);
+    const workspaceId = parseInt(req.params.workspaceId, 10);
     const userId = req.user?.userId;
 
-    if (isNaN(workspaceId) || !userId) {
-      return httpResponse(req, res, 400, 'Invalid workspace ID or user');
+    if (isNaN(workspaceId)) {
+      return httpResponse(req, res, 400, 'Invalid workspace ID.', null);
     }
 
-    const { name, description, isActive } = req.body;
+    if (!userId) {
+      return httpResponse(req, res, 401, 'Unauthorized: Missing user information.', null);
+    }
 
-    const data: any = {};
-    if (name !== undefined) data.name = name;
-    if (description !== undefined) data.description = description;
-    if (isActive !== undefined) data.isActive = isActive;
+    const normalizeField = (val: any) =>
+      val === 'null' || val === undefined || val === '' ? null : val;
 
-    // Optional: handle uploaded images (e.g., logo or banners)
-    const images = req.files ? (req.files as Express.Multer.File[]).map((file) => file.path) : [];
-    if (images.length) {
-      data.images = images; // assumes your model supports an "images" field
+    const { name, description, isActive, openingTime, closingTime, locationId } = req.body;
+
+    const data: any = {
+      ...(name && { name }),
+      ...(description && { description }),
+      ...(typeof isActive !== 'undefined' && { isActive: isActive === 'true' || isActive === true }),
+      openingTime: normalizeField(openingTime),
+      closingTime: normalizeField(closingTime),
+      locationId: normalizeField(locationId),
+    };
+
+    const images = (req.files as Express.Multer.File[])?.map((file) => file.path) || [];
+    if (images.length > 0) {
+      data.images = images;
     }
 
     const workspace = await workspaceService.updateWorkspace(workspaceId, userId, data);
