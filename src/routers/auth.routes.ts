@@ -16,5 +16,6 @@ router.post('/forgot-password', authController.forgotPassword);
 router.post('/verify-otp', authController.verifyOtp);
 router.post('/reset-password', authController.resetPassword);
 router.put('/user/:id', authMiddleware, roleRestriction([Role.ADMIN]), authController.UpdateProfile);
+router.get('/userRoles', authMiddleware, authController.userRoles);
 
 export default router;

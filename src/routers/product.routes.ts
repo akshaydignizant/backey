@@ -22,13 +22,14 @@ import {
 } from '../controllers/product.controller';
 
 import variantController from '../controllers/variant.controller';
+import upload from '../config/multerConfig';
 
 const router = Router();
 
 /**
  * Product CRUD
  */
-router.post('/:workspaceId/:categoryId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), createProduct);
+router.post('/:workspaceId/:categoryId', authMiddleware, upload.array('images'), roleRestriction([Role.ADMIN, Role.MANAGER]), createProduct);
 router.get('/:workspaceId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER, Role.STAFF]), getProductsInWorkspace);
 router.put('/:workspaceId/:productId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), updateProduct);
 router.delete('/:workspaceId/:productId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), deleteProduct);

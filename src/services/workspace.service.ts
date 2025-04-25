@@ -677,7 +677,7 @@
 
 // };
 
-import { InvitationStatus, Prisma, Role } from '@prisma/client';
+import { InvitationStatus, NotificationType, Prisma, Role } from '@prisma/client';
 import { InviteData, WorkspaceInput } from '../types/workspace.types';
 import prisma from '../util/prisma';
 import { v4 as uuidv4 } from 'uuid';
@@ -686,6 +686,8 @@ import bcrypt from 'bcryptjs';
 import { SearchParams } from '../types/types';
 import sendEmail from '../util/sendEmail';
 import redisClient from '../cache/redisClient';
+import { sendNotificationToUsers } from '../util/pushNotification';
+import { io } from '../server';
 
 export const workspaceService = {
   createWorkspace: async (userId: string, data: WorkspaceInput) => {
@@ -721,7 +723,7 @@ export const workspaceService = {
         },
         include: {
           owner: {
-            select: { id: true, firstName: true, lastName: true, email: true },
+            select: { id: true, firstName: true, lastName: true, email: true, UserRole: true },
           },
         },
       });
@@ -1218,17 +1220,30 @@ export const workspaceService = {
           </html>`
       ),
       // Creating a notification for the invited user
-      prisma.notification.create({
-        data: {
-          userId: invitedUserId!,
-          workspaceId: workspace.id,
-          title: 'Workspace Invitation',
-          message: `You have been invited to join the workspace ${workspace.name} as a ${role}. Please check your email for further details.`,
-          type: 'INVITATION',
-          isRead: false,
-        },
-      }),
+      // prisma.notification.create({
+      //   data: {
+      //     userId: invitedUserId!,
+      //     workspaceId: workspace.id,
+      //     title: 'Workspace Invitation',
+      //     message: `You have been invited to join the workspace ${workspace.name} as a ${role}. Please check your email for further details.`,
+      //     type: 'INVITATION',
+      //     isRead: false,
+      //   },
+      // }),
     ]);
+
+    // 📣 Push the notification using socket or background notifier
+    await sendNotificationToUsers(
+      workspace.id,
+      [invitedUserId!],
+      {
+        userId: invitedUserId!,
+        title: 'Workspace Invitation',
+        message: `You’ve been invited to ${workspace.name} as a ${role} and its workspaceId is ${workspace.id}.`,
+        type: "INVITATION",
+      },
+      io
+    );
 
     return invitation;
   },

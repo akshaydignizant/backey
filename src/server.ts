@@ -98,33 +98,33 @@ import logger from './util/logger'
 const httpServer = http.createServer(app)
 
 // // Set up Socket.IO
-// const io = new SocketIOServer(httpServer, {
-//   cors: {
-//     origin: ['http://localhost:3001', 'https://your-ngrok-url.ngrok-free.app'],
-//     credentials: true,
-//   },
-// })
+export const io = new SocketIOServer(httpServer, {
+  cors: {
+    origin: ['http://localhost:3001', 'https://your-ngrok-url.ngrok-free.app'],
+    credentials: true,
+  },
+})
 
 // Optional: Attach Socket.IO to app to use in routes
-// app.set('io', io)
+app.set('io', io)
 
 // // Handle socket connections
-// io.on('connection', (socket) => {
-//   console.log(`Socket connected: ${socket.id}`);
+io.on('connection', (socket) => {
+  console.log(`Socket connected: ${socket.id}`);
 
-//   const userId = socket.handshake.query.userId as string;
+  const userId = socket.handshake.query.userId as string;
 
-//   if (userId) {
-//     socket.join(userId);
-//     console.log(`👤 User ${userId} joined their room`);
-//     logger.info('SOCKET_JOINED_USER_ROOM', { socketId: socket.id, userId });
-//   }
+  if (userId) {
+    socket.join(userId);
+    console.log(`👤 User ${userId} joined their room`);
+    logger.info('SOCKET_JOINED_USER_ROOM', { socketId: socket.id, userId });
+  }
 
-//   socket.on('disconnect', () => {
-//     console.log(`🔌 Socket disconnected: ${socket.id}`);
-//     logger.info('SOCKET_DISCONNECTED', { socketId: socket.id });
-//   });
-// });
+  socket.on('disconnect', () => {
+    console.log(`🔌 Socket disconnected: ${socket.id}`);
+    logger.info('SOCKET_DISCONNECTED', { socketId: socket.id });
+  });
+});
 
 
 

@@ -3,29 +3,40 @@ import { NextFunction, Request, Response } from 'express';
 import { productService } from '../services/product.service';
 import httpError from '../util/httpError';
 import httpResponse from '../util/httpResponse';
+import { ProductInput } from '../types/product';
 
 export const createProduct = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { categoryId } = req.params;
   const workspaceId = parseInt(req.params.workspaceId);
+  const { name, description, stockQuantity } = req.body;
+  const images = req.files ? (req.files as Express.Multer.File[]).map((file) => file.path) : [];
 
   if (isNaN(workspaceId)) {
     return httpResponse(req, res, 400, 'Invalid workspaceId');
   }
 
   try {
-    const numericWorkspaceId = Number(workspaceId);
-
-    if (isNaN(numericWorkspaceId)) {
-      throw new Error('workspaceId must be a number');
+    // Validate inputs
+    if (!name?.trim()) {
+      return httpResponse(req, res, 400, 'Product name is required');
+    }
+    if (!description?.trim()) {
+      return httpResponse(req, res, 400, 'Product description is required');
     }
 
-    const product = await productService.createProduct(
-      numericWorkspaceId,
-      categoryId,
-      req.body
-    );
+    // Prepare the product input without variants
+    const productInput: ProductInput = {
+      name,
+      description,
+      isActive: true,  // Assuming default is true
+      images,
+    };
 
-    httpResponse(req, res, 201, 'Product created', product);
+    // Call the service to create the product
+    const product = await productService.createProduct(workspaceId, categoryId, productInput);
+
+    // Send response back with the created product, including category name
+    return httpResponse(req, res, 201, 'Product created', product);
   } catch (err) {
     return httpError(next, err, req, 400);
   }
@@ -57,8 +68,8 @@ export const updateProduct = async (req: Request, res: Response, next: NextFunct
 export const deleteProduct = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { workspaceId, productId } = req.params;
   try {
-    await productService.deleteProduct(Number(workspaceId), productId);
-    return httpResponse(req, res, 204, 'Product deleted');
+    const deletedProduct = await productService.deleteProduct(Number(workspaceId), productId);
+    return httpResponse(req, res, 204, 'Product deleted', deletedProduct);
   } catch (err) {
     return httpError(next, err, req, 400);
   }

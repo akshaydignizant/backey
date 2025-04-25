@@ -550,7 +550,7 @@ export const createWorkspaceWithAssignRole = async (req: Request, res: Response,
       return httpResponse(req, res, 400, 'Workspace name is required.', null);
     }
 
-    const workspace = await workspaceService.createWorkspace(userId, {
+    const workspaceData = await workspaceService.createWorkspaceWithAssignRole(userId, {
       name,
       description,
       images,
@@ -558,12 +558,14 @@ export const createWorkspaceWithAssignRole = async (req: Request, res: Response,
       closingTime,
       isActive,
     });
-    return httpResponse(req, res, 201, 'Workspace created successfully', workspace);
+
+    // Send the response with workspace ID, email, and roles
+    return httpResponse(req, res, 201, 'Workspace created successfully', workspaceData);
   } catch (error) {
     logger.error('Error creating workspace:', error);
     return httpError(next, error, req);
   }
-}
+};
 
 // Update Workspace
 export const updateWorkspace = async (req: Request, res: Response, next: NextFunction): Promise<void> => {

@@ -1,10 +1,11 @@
 export interface ProductInput {
   name: string;
   description: string;
-  categoryId: string;
-  imageUrl?: string;
+  categoryId?: string;
+  // imageUrl?: string;
+  isActive?: boolean;
   images?: string[];
-  stockQuantity?: number;
+  // stockQuantity?: number;
   variants?: VariantInput[];
 }
 

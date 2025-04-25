@@ -2,6 +2,9 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import winston from 'winston';
 import { ProductInput, ProductStatsRaw, VariantStatsRaw } from '../types/product';
 import redisClient from '../cache/redisClient';
+import { customAlphabet } from 'nanoid';
+import { generateSlug } from '../util/slugGenerator';
+import { deleteImageFromCloudinary, extractPublicIdFromCloudinaryUrl } from '../util/deleteCloudinary';
 
 const prisma = new PrismaClient();
 
@@ -14,59 +17,57 @@ const logger = winston.createLogger({
   ],
 });
 
+
+const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 4);
+
+const getUniqueSlug = async (baseSlug: string): Promise<string> => {
+  let slug = baseSlug;
+  let exists = await prisma.product.findUnique({ where: { slug } });
+
+  while (exists) {
+    slug = `${baseSlug}-${nanoid()}`;
+    exists = await prisma.product.findUnique({ where: { slug } });
+  }
+
+  return slug;
+};
 export const productService = {
   createProduct: async (workspaceId: number, categoryId: string, data: ProductInput) => {
     try {
-      // Validation
-      if (!workspaceId) {
-        throw new Error('Invalid workspaceId');
-      }
+      // Validate inputs
+      if (!workspaceId) throw new Error('Invalid workspaceId');
+      if (!categoryId) throw new Error('Invalid categoryId');
+      if (!data.name?.trim()) throw new Error('Invalid product name');
 
-      if (!categoryId) {
-        throw new Error('Invalid categoryId');
-      }
+      // Generate a unique slug
+      const baseSlug = generateSlug(data.name);
+      const slug = await getUniqueSlug(baseSlug);
 
-      if (!data.name?.trim()) {
-        throw new Error('Invalid product name');
-      }
-
-      // Slugify product name
-      const slug = data.name
-        .toLowerCase()
-        .trim()
-        .replace(/\s+/g, '-')
-        .replace(/[^a-z0-9-]/g, '');
-
+      // Extract variants from the input and remove them from product data
       const { variants, ...productData } = data;
 
+      // Create the product without variants
       const createdProduct = await prisma.product.create({
         data: {
           ...productData,
           workspaceId,
           categoryId,
           slug,
-          images: productData.images ?? [],
-          variants: variants?.length
-            ? {
-              create: variants.map((variant) => ({
-                title: variant.title,
-                sku: variant.sku,
-                price: variant.price,
-                stock: variant.stock,
-                weight: variant.weight,
-                dimensions: variant.dimensions,
-                color: variant.color,
-                size: variant.size,
-              })),
-            }
-            : undefined,
+          images: Array.isArray(productData.images) ? productData.images : [],
         },
         include: {
-          variants: true,
+          category: {
+            select: {
+              id: true,  // Only include id and name in the category
+              name: true,
+            },
+          },
         },
       });
 
-      return createdProduct;
+      return {
+        ...createdProduct,
+      };
     } catch (error) {
       logger.error('Error creating product:', error);
       throw new Error('Failed to create product');
@@ -132,6 +133,12 @@ export const productService = {
         where: { id: productId },
         data: updateData,
         include: {
+          category: {
+            select: {
+              id: true,  // Only include id and name in the category
+              name: true,
+            },
+          },
           variants: true,
         },
       });
@@ -143,33 +150,54 @@ export const productService = {
 
   deleteProduct: async (workspaceId: number, productId: string) => {
     try {
+      // Check for valid input
       if (!workspaceId || !productId || typeof productId !== 'string') {
         throw new Error('Invalid workspaceId or productId');
       }
 
+      // Fetch the product details, including images and variants
       const product = await prisma.product.findUnique({
         where: { id: productId },
-        include: { variants: true },
+        select: {
+          images: true,
+          variants: true,
+          category: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
       });
 
+      // If no product found, throw error
       if (!product) {
         throw new Error(`Product with ID ${productId} not found`);
       }
 
-      // First, delete related variants
+      // Delete related images from Cloudinary if they exist
+      if (product.images && Array.isArray(product.images)) {
+        for (let imageUrl of product.images) {
+          const publicId = extractPublicIdFromCloudinaryUrl(imageUrl);
+          await deleteImageFromCloudinary(publicId); // Delete image from Cloudinary
+        }
+      }
+
+      // Delete related variants from the database
       await prisma.productVariant.deleteMany({
         where: {
           productId: productId,
         },
       });
 
-      // Then, delete the product
+      // Finally, delete the product itself
       const deletedProduct = await prisma.product.delete({
         where: { id: productId },
       });
 
       return deletedProduct;
     } catch (error) {
+      // Log the error for tracking
       logger.error('Error deleting product: ', error);
       throw new Error('Failed to delete product');
     }
@@ -186,7 +214,15 @@ export const productService = {
           id: { in: productIds },  // Find products by the given productIds
           workspaceId: workspaceId, // Ensure they belong to the correct workspace
         },
-        include: { variants: true },
+        include: {
+          variants: true,
+          category: {
+            select: {
+              id: true,  // Only include id and name in the category
+              name: true,
+            },
+          },
+        },
       });
 
       if (products.length === 0) {
@@ -222,7 +258,12 @@ export const productService = {
       return await prisma.product.findUnique({
         where: { id: productId },
         include: {
-          category: true,
+          category: {
+            select: {
+              id: true,  // Only include id and name in the category
+              name: true,
+            },
+          },
           variants: true,
         },
       });
@@ -238,7 +279,12 @@ export const productService = {
       return await prisma.product.findUnique({
         where: { slug },
         include: {
-          category: true,
+          category: {
+            select: {
+              id: true,  // Only include id and name in the category
+              name: true,
+            },
+          },
           variants: true,
         },
       });

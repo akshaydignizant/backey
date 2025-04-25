@@ -536,4 +536,14 @@ export const authController = {
       return httpError(next, error, req, 500);
     }
   },
+  userRoles: async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const userId = req.user?.userId;
+
+    try {
+      const roles = await authService.userRoles(userId as string);
+      res.status(200).json({ roles });
+    } catch (error) {
+      res.status(500).json({ error: error });
+    }
+  },
 };

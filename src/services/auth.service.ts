@@ -849,4 +849,32 @@ export const authService = {
       roles: updatedUser.UserRole.map((ur) => ({ role: ur.role, workspaceId: ur.workspaceId })),
     };
   },
+  userRoles: async (userId: string) => {
+    try {
+      const userRoles = await prisma.userRole.findMany({
+        where: { userId }
+      });
+
+      // Define the roles you're interested in
+      const allowedRoles = ["ADMKIN", "CUSD"];
+
+      // Remove duplicates based on both 'role' and 'workspaceId', and filter by allowed roles
+      const uniqueRoles = Array.from(
+        new Map(
+          userRoles
+            .filter(userRole => allowedRoles.includes(userRole.role))  // Filter roles
+            .map((userRole) => [`${userRole.role}-${userRole.workspaceId}`, userRole])
+        ).values()
+      );
+
+      // Return the list of unique roles
+      return uniqueRoles.map((userRole) => ({
+        role: userRole.role, // Return the role
+      }));
+    } catch (error) {
+      console.error(error); // Log original error for debugging
+      throw new Error(`Failed to fetch roles for user: ${error}`);
+    }
+  }
+
 };
