@@ -6,15 +6,26 @@ import {
     getNotifications,
     createNotification,
     markNotificationAsRead,
+    markAllNotificationsAsRead,
+    getUnreadNotificationsCount,
+    filterNotifications,
+    updateNotification,
+    sendNotificationToUser,
+    bulkDeleteNotifications,
     deleteNotification,
 } from '../controllers/notification.controller';
 
 const router = Router();
 
-// Notification Routes
-router.get('/:workspaceId/notifications', authMiddleware, getNotifications);
-router.post('/:workspaceId/notifications', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), createNotification);
-router.put('/:workspaceId/notifications/:notificationId/read', authMiddleware, markNotificationAsRead);
-router.delete('/:workspaceId/notifications/:notificationId', authMiddleware, deleteNotification);
+router.get('/:workspaceId', authMiddleware, getNotifications);
+router.post('/:workspaceId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), createNotification);
+router.put('/:workspaceId/:notificationId/read', authMiddleware, markNotificationAsRead);
+router.put('/:workspaceId/mark-all-read', authMiddleware, markAllNotificationsAsRead);
+router.get('/:workspaceId/unread/count', authMiddleware, getUnreadNotificationsCount);
+router.get('/:workspaceId/filter', authMiddleware, filterNotifications);
+router.put('/:workspaceId/:notificationId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), updateNotification);
+router.post('/:workspaceId/user', authMiddleware, roleRestriction([Role.ADMIN]), sendNotificationToUser);
+router.post('/:workspaceId/bulk-delete', authMiddleware, roleRestriction([Role.ADMIN]), bulkDeleteNotifications);
+router.delete('/:workspaceId/:notificationId', authMiddleware, deleteNotification);
 
 export default router;

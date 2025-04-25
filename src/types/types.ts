@@ -36,8 +36,11 @@ declare module "express-serve-static-core" {
             userId: string;
             id?: string
             userEmail: string;
-            role: Role | null;
+            // role: Role | null;
+            roles: { role: Role; workspaceId: number | null }[]
+            permissions?: string[];
             workspaceId?: string;
+
         };
     }
 }

@@ -92,10 +92,12 @@ app.use(helmet())
 app.use(
   cors({
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD'],
-    origin: ['http://localhost:3000'], // adjust this for dev as needed
+    origin: ['http://localhost:3000', " https://30f3-2402-a00-162-ea17-7193-a897-79b2-4a7a.ngrok-free.app"], // adjust this for dev as needed
     credentials: true,
   })
 )
+// app.use(cors());
+
 app.use(express.json())
 app.use(express.static(path.join(__dirname, '../', 'public')))
 

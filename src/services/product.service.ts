@@ -72,6 +72,7 @@ export const productService = {
       throw new Error('Failed to create product');
     }
   },
+
   getProductsInWorkspace: async (workspaceId: number, page: number = 1, pageSize: number = 10) => {
     try {
       if (!workspaceId || workspaceId <= 0) {
@@ -107,6 +108,7 @@ export const productService = {
       throw new Error('Failed to fetch products');
     }
   },
+
 
   updateProduct: async (workspaceId: number, productId: string, data: Partial<ProductInput>) => {
     try {

@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Role } from '@prisma/client';
 import { z } from 'zod';
 
 // Initialize Prisma Client
@@ -161,7 +161,12 @@ export const reportService = {
         const customers = await prisma.user.findMany({
             where: {
                 workspaces: { some: { id: workspaceId } },
-                role: 'CUSTOMER',
+                UserRole: {
+                    some: {
+                        workspaceId,
+                        role: Role.CUSTOMER,
+                    },
+                },
                 orders: {
                     some: {
                         workspaceId,
@@ -196,7 +201,12 @@ export const reportService = {
         const totalCustomers = await prisma.user.count({
             where: {
                 workspaces: { some: { id: workspaceId } },
-                role: 'CUSTOMER',
+                UserRole: {
+                    some: {
+                        workspaceId,
+                        role: Role.CUSTOMER,
+                    },
+                },
             },
         });
 
@@ -234,14 +244,22 @@ export const reportService = {
         const employees = await prisma.user.findMany({
             where: {
                 workspaces: { some: { id: workspaceId } },
-                role: { in: ['ADMIN', 'MANAGER', 'STAFF'] },
+                UserRole: {
+                    some: {
+                        workspaceId,
+                        role: { in: [Role.ADMIN, Role.MANAGER, Role.STAFF] },
+                    },
+                }
             },
             select: {
                 id: true,
                 firstName: true,
                 lastName: true,
                 email: true,
-                role: true,
+                UserRole: {
+                    where: { workspaceId },
+                    select: { role: true },
+                },
                 invitationsSent: {
                     where: {
                         workspaceId,
@@ -271,7 +289,12 @@ export const reportService = {
         const totalEmployees = await prisma.user.count({
             where: {
                 workspaces: { some: { id: workspaceId } },
-                role: { in: ['ADMIN', 'MANAGER', 'STAFF'] },
+                UserRole: {
+                    some: {
+                        workspaceId,
+                        role: { in: [Role.ADMIN, Role.MANAGER, Role.STAFF] },
+                    },
+                }
             },
         });
 
@@ -279,7 +302,8 @@ export const reportService = {
             id: employee.id,
             name: `${employee.firstName} ${employee.lastName || ''}`.trim(),
             email: employee.email,
-            role: employee.role,
+            // role: employee.role,
+            roles: employee.UserRole.map((ur) => ur.role),
             orderCount: employee.orders.length,
             totalOrderValue: employee.orders.reduce((sum, order) => sum + order.totalAmount, 0),
             invitationsSent: employee.invitationsSent.length,

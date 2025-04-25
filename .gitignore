@@ -6,3 +6,4 @@ dist
 prisma/generated
 seed
 error.log
+test

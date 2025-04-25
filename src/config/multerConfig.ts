@@ -6,7 +6,7 @@ const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: {
         folder: 'backey',
-        allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4', 'mov', 'mp3', 'wav', 'pdf', 'docx', 'zip', 'rar'],
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif', 'mp4', 'mov', 'mp3', 'wav', 'pdf', 'docx', 'zip', 'rar'],
         transformation: [{ width: 500, height: 500, crop: 'limit' }],
     } as unknown as { folder: string; format: () => string; transformation?: object[] }
 });

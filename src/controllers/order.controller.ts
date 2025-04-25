@@ -163,6 +163,19 @@ export const addOrderItem = async (req: AuthRequest, res: Response, next: NextFu
   }
 };
 
+export const getAllOrderItems = async (req: Request, res: Response) => {
+  const workspaceId = Number(req.params.workspaceId); // or get from token
+  const authUserId = req.user?.userId; // assuming you're using some auth middleware
+
+  try {
+    const items = await orderService.getAllOrderItems(workspaceId, authUserId as string);
+    res.json(items);
+  } catch (error) {
+    res.status(500).json({ error: error });
+  }
+};
+
+
 export const removeOrderItem = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const workspaceId = Number(req.params.workspaceId);
   const orderId = req.params.orderId;

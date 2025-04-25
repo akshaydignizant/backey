@@ -1,6 +1,7 @@
 import { PrismaClient, ProductVariant } from '@prisma/client';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
+import { IProductVariant, IStockFilter, IStockUpdate } from '../types/products/stock.interface';
 
 // Initialize Prisma Client
 const prisma = new PrismaClient({ log: ['error'] });
@@ -37,21 +38,23 @@ const transferSchema = z.object({
     quantity: z.number().int().positive('Quantity must be positive'),
 });
 
+const stockUpdateSchema = z.object({
+    variantId: z.string().uuid('Invalid variant ID'),
+    action: z.enum(['increment', 'decrement', 'set']),
+    quantity: z.number().int().nonnegative('Quantity must be non-negative'),
+});
+
 export const inventoryService = {
     // Get Inventory: List all variants in a workspace
     async getInventory(workspaceId: number, options: { limit: number; offset: number }) {
         const { limit, offset } = optionsSchema.parse(options);
 
-        // Validate workspace
         const workspace = await prisma.workspace.findUnique({
             where: { id: workspaceId },
             select: { id: true },
         });
-        if (!workspace) {
-            throw new Error('Workspace not found');
-        }
+        if (!workspace) throw new Error('Workspace not found');
 
-        // Fetch variants
         const [variants, totalItems] = await Promise.all([
             prisma.productVariant.findMany({
                 where: { product: { workspaceId } },
@@ -94,7 +97,6 @@ export const inventoryService = {
     }) {
         const validatedData = addItemSchema.parse(data);
 
-        // Validate workspace, product, and SKU
         const [workspace, product, skuExists] = await Promise.all([
             prisma.workspace.findUnique({ where: { id: workspaceId }, select: { id: true } }),
             prisma.product.findUnique({
@@ -104,23 +106,14 @@ export const inventoryService = {
             prisma.productVariant.findUnique({ where: { sku: validatedData.sku }, select: { id: true } }),
         ]);
 
-        if (!workspace) {
-            throw new Error('Workspace not found');
-        }
-        if (!product || product.workspaceId !== workspaceId) {
-            throw new Error('Product not found in workspace');
-        }
-        if (skuExists) {
-            throw new Error('SKU already exists');
-        }
+        if (!workspace) throw new Error('Workspace not found');
+        if (!product || product.workspaceId !== workspaceId) throw new Error('Product not found in workspace');
+        if (skuExists) throw new Error('SKU already exists');
 
-        // Create variant
         return prisma.productVariant.create({
             data: {
                 id: uuid(),
                 ...validatedData,
-                // createdAt is automatically handled by Prisma
-                // updatedAt is automatically handled by Prisma
             },
             select: {
                 id: true,
@@ -147,7 +140,6 @@ export const inventoryService = {
         const validatedData = updateItemSchema.parse(data);
 
         return prisma.$transaction(async (tx) => {
-            // Validate variant and workspace
             const variant = await tx.productVariant.findUnique({
                 where: { id: itemId },
                 select: {
@@ -161,24 +153,17 @@ export const inventoryService = {
                 throw new Error('Inventory item not found in workspace');
             }
 
-            // Check SKU uniqueness if updated
             if (validatedData.sku && validatedData.sku !== variant.sku) {
                 const skuExists = await tx.productVariant.findUnique({
                     where: { sku: validatedData.sku },
                     select: { id: true },
                 });
-                if (skuExists) {
-                    throw new Error('SKU already exists');
-                }
+                if (skuExists) throw new Error('SKU already exists');
             }
 
-            // Update variant
             return tx.productVariant.update({
                 where: { id: itemId },
-                data: {
-                    ...validatedData,
-                    // updatedAt is automatically handled by Prisma
-                },
+                data: validatedData,
                 select: {
                     id: true,
                     title: true,
@@ -196,18 +181,14 @@ export const inventoryService = {
     // Get Low-Stock Items: List variants with stock below threshold
     async getLowStockItems(workspaceId: number, options: { limit: number; offset: number }) {
         const { limit, offset } = optionsSchema.parse(options);
-        const lowStockThreshold = 10; // Configurable threshold
+        const lowStockThreshold = 10;
 
-        // Validate workspace
         const workspace = await prisma.workspace.findUnique({
             where: { id: workspaceId },
             select: { id: true },
         });
-        if (!workspace) {
-            throw new Error('Workspace not found');
-        }
+        if (!workspace) throw new Error('Workspace not found');
 
-        // Fetch low-stock variants
         const [variants, totalLowStock] = await Promise.all([
             prisma.productVariant.findMany({
                 where: {
@@ -248,7 +229,7 @@ export const inventoryService = {
     },
 
     // Create Inventory Transfer: Move stock between workspaces
-    async createInventoryTransfer(workspaceId: number, data: {
+    async createInventoryTransfer(workspaceId: number, userId: string, data: {
         sourceWorkspaceId: number;
         destinationWorkspaceId: number;
         variantId: string;
@@ -256,121 +237,240 @@ export const inventoryService = {
     }) {
         const validatedData = transferSchema.parse(data);
 
-        return prisma.$transaction(async (tx) => {
-            // Validate workspaces and variant
-            const [sourceWorkspace, destinationWorkspace, sourceVariant] = await Promise.all([
-                tx.workspace.findUnique({
-                    where: { id: validatedData.sourceWorkspaceId },
-                    select: { id: true },
-                }),
-                tx.workspace.findUnique({
-                    where: { id: validatedData.destinationWorkspaceId },
-                    select: { id: true },
-                }),
-                tx.productVariant.findUnique({
-                    where: { id: validatedData.variantId },
-                    select: {
-                        id: true,
-                        stock: true,
-                        title: true,
-                        sku: true,
-                        price: true,
-                        size: true,
-                        productId: true,
-                        product: { select: { workspaceId: true, name: true, categoryId: true } },
-                    },
-                }),
-            ]);
+        try {
+            return await prisma.$transaction(async (tx) => {
+                const [sourceWorkspace, destinationWorkspace, sourceVariant] = await Promise.all([
+                    tx.workspace.findUnique({ where: { id: validatedData.sourceWorkspaceId }, select: { id: true } }),
+                    tx.workspace.findUnique({ where: { id: validatedData.destinationWorkspaceId }, select: { id: true } }),
+                    tx.productVariant.findUnique({
+                        where: { id: validatedData.variantId },
+                        select: {
+                            id: true,
+                            stock: true,
+                            title: true,
+                            sku: true,
+                            price: true,
+                            size: true,
+                            productId: true,
+                            product: { select: { workspaceId: true, name: true, categoryId: true } },
+                        },
+                    }),
+                ]);
 
-            if (!sourceWorkspace || sourceWorkspace.id !== workspaceId) {
-                throw new Error('Source workspace not found or invalid');
-            }
-            if (!destinationWorkspace) {
-                throw new Error('Destination workspace not found');
-            }
-            if (!sourceVariant || sourceVariant.product.workspaceId !== workspaceId) {
-                throw new Error('Variant not found in source workspace');
-            }
-            if (sourceVariant.stock < validatedData.quantity) {
-                throw new Error('Insufficient stock for transfer');
-            }
+                if (!sourceWorkspace || sourceWorkspace.id !== workspaceId) {
+                    throw new Error('Source workspace not found or invalid');
+                }
+                if (!destinationWorkspace) throw new Error('Destination workspace not found');
+                if (!sourceVariant || sourceVariant.product.workspaceId !== workspaceId) throw new Error('Variant not found in source workspace');
+                if (sourceVariant.stock < validatedData.quantity) throw new Error('Insufficient stock for transfer');
 
-            // Check if the product exists in the destination workspace
-            let destinationProduct = await tx.product.findFirst({
-                where: {
-                    name: sourceVariant.product.name,
-                    workspaceId: validatedData.destinationWorkspaceId,
-                },
-                select: { id: true },
-            });
-
-            // If product doesn't exist, create it in the destination workspace
-            if (!destinationProduct) {
-                destinationProduct = await tx.product.create({
-                    data: {
-                        id: uuid(),
-                        name: sourceVariant.product.name,
-                        slug: `${sourceVariant.product.name.toLowerCase().replace(/\s+/g, '-')}-${uuid().slice(0, 8)}`,
-                        description: `Transferred product: ${sourceVariant.product.name}`,
-                        images: [],
-                        isActive: true,
-                        categoryId: sourceVariant.product.categoryId,
-                        workspaceId: validatedData.destinationWorkspaceId,
-                        // createdAt is automatically handled by Prisma
-                        // updatedAt is automatically handled by Prisma
-                    },
+                let destinationProduct = await tx.product.findFirst({
+                    where: { name: sourceVariant.product.name, workspaceId: validatedData.destinationWorkspaceId },
                     select: { id: true },
                 });
-            }
 
-            // Check if variant exists in destination workspace
-            let destinationVariant = await tx.productVariant.findFirst({
-                where: {
-                    productId: destinationProduct.id,
-                    sku: sourceVariant.sku,
-                },
-                select: { id: true, stock: true },
-            });
+                if (!destinationProduct) {
+                    destinationProduct = await tx.product.create({
+                        data: {
+                            id: uuid(),
+                            name: sourceVariant.product.name,
+                            slug: `${sourceVariant.product.name.toLowerCase().replace(/\s+/g, '-')}-${uuid().slice(0, 8)}`,
+                            description: `Transferred product: ${sourceVariant.product.name}`,
+                            images: [],
+                            isActive: true,
+                            categoryId: sourceVariant.product.categoryId,
+                            workspaceId: validatedData.destinationWorkspaceId,
+                        },
+                        select: { id: true },
+                    });
+                }
 
-            // If variant doesn't exist, create it
-            if (!destinationVariant) {
-                destinationVariant = await tx.productVariant.create({
-                    data: {
-                        id: uuid(),
-                        title: sourceVariant.title,
-                        sku: `${sourceVariant.sku}-${uuid().slice(0, 8)}`, // Ensure unique SKU
-                        price: sourceVariant.price,
-                        stock: 0,
-                        size: sourceVariant.size,
-                        productId: destinationProduct.id,
-                        isAvailable: true,
-                        // updatedAt: new Date(),
-                    },
+                let destinationVariant = await tx.productVariant.findFirst({
+                    where: { productId: destinationProduct.id, sku: sourceVariant.sku },
                     select: { id: true, stock: true },
                 });
+
+                if (!destinationVariant) {
+                    destinationVariant = await tx.productVariant.create({
+                        data: {
+                            id: uuid(),
+                            title: sourceVariant.title,
+                            sku: `${sourceVariant.sku}-${uuid().slice(0, 8)}`,
+                            price: sourceVariant.price,
+                            stock: validatedData.quantity,  // Set initial stock to transfer quantity
+                            size: sourceVariant.size,
+                            productId: destinationProduct.id,
+                            isAvailable: true,
+                        },
+                        select: { id: true, stock: true },
+                    });
+                }
+
+                await Promise.all([
+                    tx.productVariant.update({
+                        where: { id: validatedData.variantId },
+                        data: { stock: { decrement: validatedData.quantity } },
+                    }),
+                    tx.productVariant.update({
+                        where: { id: destinationVariant.id },
+                        data: { stock: { increment: validatedData.quantity } },
+                    }),
+                ]);
+
+                // Optional: Send a notification for successful transfer
+                await tx.notification.create({
+                    data: {
+                        userId: userId,  // Replace with actual owner ID
+                        workspaceId: validatedData.destinationWorkspaceId,
+                        title: 'Inventory Transfer Completed',
+                        message: `Successfully transferred ${validatedData.quantity} items of ${sourceVariant.title} to your workspace.`,
+                        type: 'STOCK_TRANSFER',
+                        isRead: false,
+                    },
+                });
+
+                return {
+                    transferId: uuid(),
+                    sourceWorkspaceId: validatedData.sourceWorkspaceId,
+                    destinationWorkspaceId: validatedData.destinationWorkspaceId,
+                    variantId: validatedData.variantId,
+                    quantity: validatedData.quantity,
+                    createdAt: new Date(),
+                };
+            });
+        } catch (error) {
+            console.error('Error during inventory transfer: ', error);
+            throw new Error('There was an error processing the inventory transfer.');
+        }
+    },
+
+    // Get stock information for a specific variant
+    async getVariantStock(variantId: string): Promise<IProductVariant | null> {
+        z.string().uuid('Invalid variant ID').parse(variantId);
+        return prisma.productVariant.findUnique({
+            where: { id: variantId },
+            select: {
+                id: true,
+                title: true,
+                sku: true,
+                price: true,
+                stock: true,
+                weight: true,
+                dimensions: true,
+                color: true,
+                size: true,
+                isAvailable: true,
+                productId: true,
+            },
+        });
+    },
+
+    // Update stock for a variant
+    async updateStock(data: IStockUpdate): Promise<IProductVariant> {
+        const { variantId, quantity, action } = stockUpdateSchema.parse(data);
+
+        const variant = await prisma.productVariant.findUnique({
+            where: { id: variantId },
+            select: { id: true, stock: true },
+        });
+        if (!variant) throw new Error('Variant not found');
+
+        let updateData: { stock?: number | { increment: number } | { decrement: number }; isAvailable?: boolean } = {};
+
+        if (action === 'increment') {
+            updateData = { stock: { increment: quantity } };
+        } else if (action === 'decrement') {
+            if (variant.stock < quantity) throw new Error('Insufficient stock for decrement');
+            updateData = { stock: { decrement: quantity } };
+        } else {
+            updateData = { stock: quantity };
+        }
+
+        return prisma.productVariant.update({
+            where: { id: variantId },
+            data: {
+                ...updateData,
+                isAvailable: updateData.stock !== undefined ? (typeof updateData.stock === 'number' ? updateData.stock > 0 : true) : undefined,
+            },
+            select: {
+                id: true,
+                title: true,
+                sku: true,
+                price: true,
+                stock: true,
+                weight: true,
+                dimensions: true,
+                color: true,
+                size: true,
+                isAvailable: true,
+                productId: true,
+            },
+        });
+    },
+
+    // List variants with stock information based on filters
+    async listStock(filters: IStockFilter): Promise<IProductVariant[]> {
+        const where: any = {};
+
+        // Parse productId if needed
+        if (filters.productId) where.productId = filters.productId;
+
+        // Coerce min/max stock to numbers
+        const minStock = filters.minStock !== undefined ? Number(filters.minStock) : undefined;
+        const maxStock = filters.maxStock !== undefined ? Number(filters.maxStock) : undefined;
+
+        if (!isNaN(minStock ?? NaN) || !isNaN(maxStock ?? NaN)) {
+            where.stock = {};
+            if (!isNaN(minStock ?? NaN)) where.stock.gte = minStock;
+            if (!isNaN(maxStock ?? NaN)) where.stock.lte = maxStock;
+        }
+
+        // Coerce isAvailable to boolean
+        if (filters.isAvailable !== undefined) {
+            if (typeof filters.isAvailable === 'string') {
+                where.isAvailable = filters.isAvailable === 'true';
+            } else {
+                where.isAvailable = filters.isAvailable;
             }
+        }
 
-            // Update stock
-            await Promise.all([
-                tx.productVariant.update({
-                    where: { id: validatedData.variantId },
-                    data: { stock: { decrement: validatedData.quantity } },
-                }),
-                tx.productVariant.update({
-                    where: { id: destinationVariant.id },
-                    data: { stock: { increment: validatedData.quantity } },
-                }),
-            ]);
+        return prisma.productVariant.findMany({
+            where,
+            select: {
+                id: true,
+                title: true,
+                sku: true,
+                price: true,
+                stock: true,
+                weight: true,
+                dimensions: true,
+                color: true,
+                size: true,
+                isAvailable: true,
+                productId: true,
+            },
+            orderBy: { stock: 'asc' },
+        });
+    },
 
-            // Log transfer (simplified, could be a new model)
-            return {
-                transferId: uuid(),
-                sourceWorkspaceId: validatedData.sourceWorkspaceId,
-                destinationWorkspaceId: validatedData.destinationWorkspaceId,
-                variantId: validatedData.variantId,
-                quantity: validatedData.quantity,
-                createdAt: new Date(),
-            };
+    // Get low stock items (below threshold)
+    async getLowStock(threshold: number = 5): Promise<IProductVariant[]> {
+        return prisma.productVariant.findMany({
+            where: { stock: { lte: threshold } },
+            select: {
+                id: true,
+                title: true,
+                sku: true,
+                price: true,
+                stock: true,
+                weight: true,
+                dimensions: true,
+                color: true,
+                size: true,
+                isAvailable: true,
+                productId: true,
+            },
+            orderBy: { stock: 'asc' },
         });
     },
 };

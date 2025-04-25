@@ -15,7 +15,7 @@ model User {
   email               String               @unique
   password            String
   phone               String?              @unique
-  role                Role?                @default(ADMIN)
+  // role                Role?                @default(ADMIN)
   status              UserStatus           @default(ACTIVE)
   termsAccepted       Boolean              @default(false)
   phoneVerified       Boolean              @default(false)
@@ -37,6 +37,8 @@ model User {
   Address             Address[]
   Notification        Notification[]
   OrderStatusHistory  OrderStatusHistory[]
+  UserRole            UserRole[]
+  UserDevice          UserDevice[]
 
   // Index on email and phone for fast lookup
   @@index([email])
@@ -45,13 +47,15 @@ model User {
 }
 
 model Workspace {
-  id              Int              @id @default(autoincrement())
-  name            String           @unique
-  slug            String           @unique
-  description     String?
-  images          String[]         @default([])
-  openingTime     String?
-  closingTime     String?
+  id          Int        @id @default(autoincrement())
+  name        String     @unique
+  slug        String     @unique
+  description String?
+  images      String[]   @default([])
+  openingTime String?
+  closingTime String?
+  UserRole    UserRole[]
+
   isActive        Boolean          @default(true)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -218,6 +222,7 @@ model Bill {
   userId          String?
   totalAmount     Float
   paymentMethod   PaymentMethod
+  status          BillStatus    @default(PENDING)
   createdManually Boolean       @default(false)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -300,6 +305,31 @@ model Notification {
   @@index([isRead])
 }
 
+model UserRole {
+  id          Int    @id @default(autoincrement())
+  userId      String
+  workspaceId Int?
+  role        Role   @default(ADMIN)
+
+  user      User       @relation(fields: [userId], references: [id])
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
+
+  @@unique([userId, workspaceId, role]) // Prevent duplicate role assignments
+  @@index([userId])
+  @@index([workspaceId])
+}
+
+model UserDevice {
+  id          String   @id @default(uuid())
+  userId      String
+  deviceToken String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
 enum Role {
   ADMIN
   MANAGER
@@ -338,4 +368,12 @@ enum NotificationType {
   ORDER_UPDATE
   INVITATION
   SYSTEM
+  ORDER_PLACED
+  STOCK_TRANSFER
+}
+
+enum BillStatus {
+  PENDING
+  PAID
+  CANCELLED
 }

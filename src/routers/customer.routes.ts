@@ -1,4 +1,8 @@
 // // Customer routes
+// /api/customer/orders
+// /api/customer/cart
+// /api/customer/notifications
+
 // router.post('/:workspaceId/customers', authMiddleware, createCustomer);
 // router.get('/:workspaceId/customers', authMiddleware, getCustomers);
 // router.get('/:workspaceId/customers/:customerId', authMiddleware, getCustomerDetails);

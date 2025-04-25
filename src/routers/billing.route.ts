@@ -1,46 +1,47 @@
-// route.ts
-
-import { Router } from "express";
-import { billController } from "../controllers/billing.controller";
+import { Router } from 'express';
+import { billController } from '../controllers/billing.controller';
 
 const router = Router();
 
-// Route to create a new bill
-router.post("/", billController.createBill);
+/**
+ * Bill Routes
+ */
 
-// Route to get a specific bill by its ID
-router.get("/:billId", billController.getBillById);
+// Create a new bill
+router.post('/', billController.createBill);
 
-// Route to update the status of a bill (e.g., marking it as paid)
-// router.patch("/bills/:billId/status", billController.updateBillStatus);
+// Get all bills
+router.get('/', billController.getAllBills);
 
-// Route to get all bills for a specific user
-router.get("/users/:userId/bills", billController.getBillsByUser);
+// Get a specific bill by ID
+router.get('/:billId', billController.getBillById);
 
-// Route to get all bill items associated with a specific bill
-router.get("/:billId/items", billController.getBillItemsByBill);
+// Update a bill
+router.put('/:billId', billController.updateBill);
 
-// router.get("/", billController.getAllBills);
-// router.put("/:billId", billController.updateBill);
-// router.delete("/:billId", billController.deleteBill);
+// Delete a bill
+router.delete('/:billId', billController.deleteBill);
 
-// // Bill items routes
-// router.get("/:billId/items", billController.getBillItemsByBill);
-// router.post("/:billId/items", billController.addItemsToBill);
-// router.put("/:billId/items/:itemId", billController.updateBillItem);
-// router.delete("/:billId/items/:itemId", billController.deleteBillItem);
+// Update the status of a bill (e.g., mark as paid)
+router.patch('/:billId/status', billController.updateBillStatus);
 
-// Endpoint | Method | Description
-//     / api / bills / | POST | Create new bill
-//         / api / bills / | GET | Get all bills(with filters)
-// /api/bills /: billId | GET | Get specific bill by ID
-//     / api / bills /: billId | PUT | Update an existing bill
-//         / api / bills /: billId | DELETE | Delete a bill
-//             / api / bills / user /: userId | GET | Get all bills for a user
-//                 / api / bills /: billId / items | GET | Get all items of a bill
-//                     / api / bills /: billId / items | POST | Add item(s) to a bill
-//                         / api / bills /: billId / items /: itemId | PUT | Update a specific bill item
-//                             / api / bills /: billId / items /: itemId | DELETE | Delete a specific bill item
+// Get all bills for a specific user
+router.get('/users/:userId/bills', billController.getBillsByUser);
 
+/**
+ * Bill Items Routes
+ */
+
+// Get all items associated with a bill
+router.get('/:billId/items', billController.getBillItemsByBill);
+
+// Add items to a bill
+router.post('/:billId/items', billController.addItemsToBill);
+
+// Update a bill item
+router.put('/:billId/items/:itemId', billController.updateBillItem);
+
+// Delete a bill item
+router.delete('/:billId/items/:itemId', billController.deleteBillItem);
 
 export default router;

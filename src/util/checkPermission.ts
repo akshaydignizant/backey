@@ -1,5 +1,7 @@
 // import prisma from "./prisma";
 
+import prisma from "./prisma";
+
 // export const checkPermission = async (workspaceId: number, userId: string, permission: string) => {
 //   const rolePermission = await prisma.rolePermission.findFirst({
 //     where: {
@@ -11,25 +13,52 @@
 //   if (!rolePermission) throw new Error('Insufficient permissions');
 // };
 
-import prisma from "./prisma";
+// import prisma from "./prisma";
+
+// export const checkPermission = async (workspaceId: number, userId: string, permission: string) => {
+//   const user = await prisma.user.findUnique({ where: { id: userId } });
+
+//   if (!user || !user.role) {
+//     throw new Error("User not found or role is undefined");
+//   }
+
+//   // Admin bypass logic
+//   if (user.role === 'ADMIN') return;
+
+//   const rolePermission = await prisma.rolePermission.findFirst({
+//     where: {
+//       workspaceId,
+//       role: user.role,
+//       permission: { has: permission },
+//     },
+//   });
+
+//   if (!rolePermission) throw new Error("Insufficient permissions");
+// };
 
 export const checkPermission = async (workspaceId: number, userId: string, permission: string) => {
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const userRole = await prisma.userRole.findFirst({
+    where: {
+      userId,
+      workspaceId,
+    },
+  });
 
-  if (!user || !user.role) {
-    throw new Error("User not found or role is undefined");
+  if (!userRole) {
+    throw new Error("User does not have a role in this workspace");
   }
 
-  // Admin bypass logic
-  if (user.role === 'ADMIN') return;
+  if (userRole.role === 'ADMIN') return;
 
   const rolePermission = await prisma.rolePermission.findFirst({
     where: {
       workspaceId,
-      role: user.role,
+      role: userRole.role,
       permission: { has: permission },
     },
   });
 
-  if (!rolePermission) throw new Error("Insufficient permissions");
+  if (!rolePermission) {
+    throw new Error("Insufficient permissions");
+  }
 };

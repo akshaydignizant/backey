@@ -1,15 +1,15 @@
-import { PrismaClient, NotificationType } from '@prisma/client';
+import { PrismaClient, NotificationType, Role } from '@prisma/client';
+import { Server as SocketIOServer } from 'socket.io';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 
-// Initialize Prisma Client
 const prisma = new PrismaClient({ log: ['error'] });
 
 // Validation schemas
 const optionsSchema = z.object({
     limit: z.number().min(1).max(100).default(50),
     offset: z.number().min(0).default(0),
-    type: z.enum(['LOW_STOCK', 'ORDER_UPDATE', 'INVITATION', 'SYSTEM']).optional(),
+    type: z.nativeEnum(NotificationType).optional(),
     isRead: z.boolean().optional(),
 }).strict();
 
@@ -17,203 +17,225 @@ const createNotificationSchema = z.object({
     userId: z.string().uuid('Invalid user ID'),
     title: z.string().min(1, 'Title is required').max(100),
     message: z.string().min(1, 'Message is required').max(500),
-    type: z.enum(['LOW_STOCK', 'ORDER_UPDATE', 'INVITATION', 'SYSTEM']),
+    type: z.nativeEnum(NotificationType),
 });
 
+interface DeleteNotificationParams {
+    notificationId: string;
+    workspaceId: number;
+    userId: string;
+    userRoles: { role: Role; workspaceId: number }[];
+}
+
+// Notification Service
 export const notificationService = {
-    // Get Notifications: List user-specific notifications in a workspace
-    async getNotifications(workspaceId: number, userId: string, options: {
-        limit: number;
-        offset: number;
+    async getNotifications(userId: string, options: {
+        limit?: number;
+        offset?: number;
         type?: NotificationType;
         isRead?: boolean;
     }) {
-        const { limit, offset, type, isRead } = optionsSchema.parse(options);
+        const parsedOptions = optionsSchema.parse(options);
 
-        // Validate workspace and user
-        const [workspace, user] = await Promise.all([
-            prisma.workspace.findUnique({ where: { id: workspaceId }, select: { id: true } }),
-            prisma.user.findUnique({ where: { id: userId }, select: { id: true } }),
+        const [user] = await Promise.all([
+            // prisma.workspace.findUnique({ where: { id: workspaceId } }),
+            prisma.user.findUnique({ where: { id: userId } }),
         ]);
 
-        if (!workspace) {
-            throw new Error('Workspace not found');
-        }
-        if (!user) {
-            throw new Error('User not found');
-        }
+        // if (!workspace) throw new Error('Workspace not found');
+        if (!user) throw new Error('User not found');
 
-        // Fetch notifications
-        const [notifications, totalNotifications] = await Promise.all([
+        const whereClause = {
+            // workspaceId,
+            userId,
+            ...(parsedOptions.type ? { type: parsedOptions.type } : {}),
+            ...(parsedOptions.isRead !== undefined ? { isRead: parsedOptions.isRead } : {}),
+        };
+
+        const [notifications, total] = await Promise.all([
             prisma.notification.findMany({
-                where: {
-                    workspaceId,
-                    userId,
-                    ...(type ? { type } : {}),
-                    ...(isRead !== undefined ? { isRead } : {}),
-                },
-                select: {
-                    id: true,
-                    title: true,
-                    message: true,
-                    type: true,
-                    isRead: true,
-                    createdAt: true,
-                    workspace: { select: { name: true } },
-                },
+                where: whereClause,
                 orderBy: { createdAt: 'desc' },
-                take: limit,
-                skip: offset,
+                skip: parsedOptions.offset,
+                take: parsedOptions.limit,
             }),
-            prisma.notification.count({
-                where: {
-                    workspaceId,
-                    userId,
-                    ...(type ? { type } : {}),
-                    ...(isRead !== undefined ? { isRead } : {}),
-                },
-            }),
+            prisma.notification.count({ where: whereClause }),
         ]);
 
         return {
-            workspaceId,
+            // workspaceId,
             userId,
-            totalNotifications,
+            total,
             notifications,
-            pagination: { limit, offset },
+            pagination: { ...parsedOptions },
         };
     },
 
-    // Create Notification: Add a new notification
-    async createNotification(workspaceId: number, data: {
-        userId: string;
-        title: string;
-        message: string;
-        type: NotificationType;
-    }) {
-        const validatedData = createNotificationSchema.parse(data);
+    deleteNotification: async ({
+        notificationId,
+        workspaceId,
+        userId,
+        userRoles,
+    }: DeleteNotificationParams) => {
+        // Validate inputs
+        if (!notificationId || !workspaceId) {
+            throw new Error('Notification ID and workspace ID are required');
+        }
 
-        // Validate workspace and user
+        // Check if the user has ADMIN or MANAGER role in the workspace
+        const hasAdminOrManagerRole = userRoles.some(
+            (roleObj) =>
+                [Role.ADMIN, Role.MANAGER, Role.STAFF, Role.CUSTOMER].includes(roleObj.role) &&
+                roleObj.workspaceId === workspaceId
+        );
+
+        // Fetch the notification
+        const notification = await prisma.notification.findUnique({
+            where: { id: notificationId },
+            select: { id: true, userId: true, workspaceId: true },
+        });
+
+        if (!notification) {
+            throw new Error('Notification not found');
+        }
+
+        // Check if the notification belongs to the workspace
+        if (notification.workspaceId !== workspaceId) {
+            throw new Error('Notification does not belong to the specified workspace');
+        }
+
+        // Check if the user is the owner or has ADMIN/MANAGER role
+        if (notification.userId !== userId && !hasAdminOrManagerRole) {
+            throw new Error('Unauthorized: You cannot delete this notification');
+        }
+
+        // Delete the notification
+        await prisma.notification.delete({
+            where: { id: notificationId },
+        });
+
+        return { message: 'Notification deleted successfully' };
+    },
+
+    async createNotification(workspaceId: number, data: z.infer<typeof createNotificationSchema>) {
+        const validated = createNotificationSchema.parse(data);
+
         const [workspace, user] = await Promise.all([
-            prisma.workspace.findUnique({ where: { id: workspaceId }, select: { id: true } }),
-            prisma.user.findUnique({ where: { id: validatedData.userId }, select: { id: true } }),
+            prisma.workspace.findUnique({ where: { id: workspaceId } }),
+            prisma.user.findUnique({ where: { id: validated.userId } }),
         ]);
 
-        if (!workspace) {
-            throw new Error('Workspace not found');
-        }
-        if (!user) {
-            throw new Error('User not found');
-        }
+        if (!workspace) throw new Error('Workspace not found');
+        if (!user) throw new Error('User not found');
 
-        // Create notification
         return prisma.notification.create({
             data: {
                 id: uuid(),
-                ...validatedData,
+                ...validated,
                 workspaceId,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-            },
-            select: {
-                id: true,
-                title: true,
-                message: true,
-                type: true,
-                isRead: true,
-                createdAt: true,
-                user: { select: { email: true } },
-                workspace: { select: { name: true } },
+                isRead: false,
             },
         });
     },
 
-    // Mark Notification as Read: Update notification status
     async markNotificationAsRead(workspaceId: number, notificationId: string, userId: string) {
-        // Validate workspace, user, and notification
-        const [workspace, user, notification] = await Promise.all([
-            prisma.workspace.findUnique({ where: { id: workspaceId }, select: { id: true } }),
-            prisma.user.findUnique({ where: { id: userId }, select: { id: true } }),
-            prisma.notification.findUnique({
-                where: { id: notificationId },
-                select: { id: true, userId: true, isRead: true },
-            }),
-        ]);
+        const exists = await prisma.notification.findFirst({
+            where: { id: notificationId, workspaceId, userId },
+            select: { id: true },
+        });
 
-        if (!workspace) {
-            throw new Error('Workspace not found');
-        }
-        if (!user) {
-            throw new Error('User not found');
-        }
-        if (!notification) {
-            throw new Error('Notification not found');
-        }
-        if (notification.userId !== userId) {
-            throw new Error('Unauthorized: Notification belongs to another user');
-        }
-        if (notification.isRead) {
-            throw new Error('Notification already marked as read');
-        }
+        if (!exists) throw new Error('Notification not found or unauthorized');
 
-        // Update notification
+        await prisma.notification.update({
+            where: { id: notificationId },
+            data: { isRead: true },
+        });
+    },
+
+    async markAllAsRead(workspaceId: number, userId: string) {
+        const result = await prisma.notification.updateMany({
+            where: { workspaceId, userId, isRead: false },
+            data: { isRead: true },
+        });
+        return { message: `${result.count} notifications marked as read.` };
+    },
+
+    async getUnreadCount(workspaceId: number, userId: string) {
+        const count = await prisma.notification.count({
+            where: { workspaceId, userId, isRead: false },
+        });
+        return { count };
+    },
+
+    async filter(workspaceId: number, userId: string, filters: any) {
+        return prisma.notification.findMany({
+            where: {
+                workspaceId,
+                userId,
+                ...filters,
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+    },
+
+    async update(workspaceId: number, notificationId: string, data: Partial<z.infer<typeof createNotificationSchema>>) {
         return prisma.notification.update({
             where: { id: notificationId },
-            data: { isRead: true, updatedAt: new Date() },
-            select: {
-                id: true,
-                title: true,
-                message: true,
-                type: true,
-                isRead: true,
-                createdAt: true,
-                workspace: { select: { name: true } },
+            data: {
+                ...data,
+                updatedAt: new Date(),
             },
         });
     },
 
-    // Delete Notification: Remove a notification
-    async deleteNotification(workspaceId: number, notificationId: string, userId: string) {
-        // Validate workspace, user, and notification
-        const [workspace, user, notification] = await Promise.all([
-            prisma.workspace.findUnique({ where: { id: workspaceId }, select: { id: true } }),
-            prisma.user.findUnique({ where: { id: userId }, select: { id: true } }),
-            prisma.notification.findUnique({
-                where: { id: notificationId },
-                select: { id: true, userId: true },
-            }),
-        ]);
+    async sendToUser(
+        workspaceId: number,
+        userId: string,
+        data: z.infer<typeof createNotificationSchema>,
+        io?: SocketIOServer // optional for reusability
+    ) {
+        const validated = createNotificationSchema.parse({
+            ...data,
+            userId,
+        });
 
-        if (!workspace) {
-            throw new Error('Workspace not found');
-        }
-        if (!user) {
-            throw new Error('User not found');
-        }
-        if (!notification) {
-            throw new Error('Notification not found');
-        }
-        if (notification.userId !== userId) {
-            throw new Error('Unauthorized: Notification belongs to another user');
-        }
-
-        // Delete notification
-        return prisma.notification.delete({
-            where: { id: notificationId },
-            select: {
-                id: true,
-                title: true,
-                message: true,
-                type: true,
-                isRead: true,
-                createdAt: true,
+        const notification = await prisma.notification.create({
+            data: {
+                id: uuid(),
+                ...validated,
+                workspaceId,
+                isRead: false,
             },
         });
+
+        if (io) {
+            io.to(userId).emit('receive-notification', {
+                id: notification.id,
+                title: notification.title,
+                message: notification.message,
+                type: notification.type,
+                createdAt: notification.createdAt,
+                workspaceId: notification.workspaceId,
+            });
+
+            console.log(`📡 Emitted notification to ${userId}: ${notification.title}`);
+        }
+
+        return notification;
+    },
+
+    async bulkDelete(workspaceId: number, notificationIds: string[]) {
+        const result = await prisma.notification.deleteMany({
+            where: {
+                id: { in: notificationIds },
+                workspaceId,
+            },
+        });
+        return { message: `${result.count} notifications deleted.` };
     },
 };
 
-// Graceful Prisma Client shutdown
-process.on('SIGTERM', async () => {
+// Graceful shutdown
+process.on('SIGINT', async () => {
     await prisma.$disconnect();
-    process.exit(0);
 });
