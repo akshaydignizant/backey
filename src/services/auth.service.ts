@@ -329,6 +329,161 @@ import crypto from 'crypto';
 import { Location, Role, User, UserStatus } from '@prisma/client';
 
 export const authService = {
+  // signupService: async (
+  //   firstName: string,
+  //   lastName: string | null,
+  //   email: string,
+  //   password: string,
+  //   phone: string | null,
+  //   roles: Role[],
+  //   workspaceId: number | null,
+  //   workspace: { name: string; slug: string; description?: string } | null,
+  //   locationId?: string | null,
+  //   location?: any
+  // ) => {
+  //   const existingUser = await prisma.user.findFirst({
+  //     where: {
+  //       OR: [
+  //         { email },
+  //         ...(phone ? [{ phone }] : []),
+  //       ],
+  //     },
+  //     select: { id: true, email: true },
+  //   });
+
+  //   if (existingUser) throw new Error('User with this email or phone already exists');
+
+  //   const hashedPassword = await bcrypt.hash(password, 10);
+
+  //   let resolvedLocationId: string | null = null;
+  //   if (locationId) {
+  //     const existingLocation = await prisma.location.findUnique({ where: { id: locationId } });
+  //     if (!existingLocation) {
+  //       throw new Error('Invalid locationId');
+  //     }
+  //     resolvedLocationId = locationId;
+  //   }
+
+  //   if (!locationId && location && typeof location === 'object') {
+  //     const newLocation = await prisma.location.create({
+  //       data: {
+  //         name: location.name,
+  //         address: location.address,
+  //         street: location.street,
+  //         city: location.city,
+  //         region: location.region,
+  //         postalCode: location.postalCode,
+  //         country: location.country,
+  //         isDefault: location.isDefault ?? false,
+  //       },
+  //     });
+  //     resolvedLocationId = newLocation.id;
+  //   }
+
+  //   // Create user first
+  //   const newUser = await prisma.user.create({
+  //     data: {
+  //       firstName,
+  //       lastName,
+  //       email,
+  //       password: hashedPassword,
+  //       phone,
+  //       locationId: resolvedLocationId,
+  //     },
+  //   });
+
+  //   let newWorkspaceId: number | null = workspaceId;
+
+  //   // Only create workspace if roles include non-customer roles
+  //   const hasNonCustomerRoles = roles.some(role => role !== Role.CUSTOMER);
+
+  //   if (hasNonCustomerRoles) {
+  //     if (!workspaceId && !workspace) {
+  //       // Create default workspace if no workspace provided but has non-customer roles
+  //       const defaultSlug = `${firstName.toLowerCase()}-${email.split('@')[0].toLowerCase()}-${Date.now()}`;
+  //       const defaultWorkspace = await prisma.workspace.create({
+  //         data: {
+  //           name: `${firstName}'s Workspace`,
+  //           slug: defaultSlug,
+  //           description: `Workspace for ${firstName}`,
+  //           ownerId: newUser.id,
+  //           isActive: true,
+  //         },
+  //       });
+  //       newWorkspaceId = defaultWorkspace.id;
+  //     } else if (workspace && typeof workspace === 'object') {
+  //       const existingWorkspace = await prisma.workspace.findUnique({ where: { slug: workspace.slug } });
+  //       if (existingWorkspace) {
+  //         throw new Error('Workspace slug already exists');
+  //       }
+  //       const newWorkspace = await prisma.workspace.create({
+  //         data: {
+  //           name: workspace.name,
+  //           slug: workspace.slug,
+  //           description: workspace.description,
+  //           ownerId: newUser.id,
+  //           isActive: true,
+  //         },
+  //       });
+  //       newWorkspaceId = newWorkspace.id;
+  //     }
+  //   }
+
+  //   // Assign roles to workspace if workspace exists
+  //   if (newWorkspaceId) {
+  //     await prisma.userRole.createMany({
+  //       data: roles.map((role) => ({
+  //         userId: newUser.id,
+  //         workspaceId: newWorkspaceId!,
+  //         role,
+  //       })),
+  //     });
+  //   } else if (workspaceId) {
+  //     // Assign roles to existing workspace
+  //     await prisma.userRole.createMany({
+  //       data: roles.map((role) => ({
+  //         userId: newUser.id,
+  //         workspaceId,
+  //         role,
+  //       })),
+  //     });
+  //   } else {
+  //     // For customers with no workspace, just assign the customer role without workspace
+  //     await prisma.userRole.createMany({
+  //       data: roles.map((role) => ({
+  //         userId: newUser.id,
+  //         workspaceId: null,
+  //         role,
+  //       })),
+  //     });
+
+  //   }
+
+  //   const { token, refreshToken } = generateToken(newUser.id);
+
+  //   await Promise.all([
+  //     redisClient.setEx(`auth:${newUser.id}`, RedisTTL.ACCESS_TOKEN, token),
+  //     redisClient.setEx(`refresh:${newUser.id}`, RedisTTL.REFRESH_TOKEN, refreshToken),
+  //   ]);
+
+  //   const userRoles = await prisma.userRole.findMany({
+  //     where: { userId: newUser.id },
+  //     select: { role: true, workspaceId: true },
+  //   });
+
+  //   return {
+  //     token,
+  //     refreshToken,
+  //     user: {
+  //       id: newUser.id,
+  //       email: newUser.email,
+  //       roles: userRoles.map((ur) => ({ role: ur.role, workspaceId: ur.workspaceId })),
+  //       locationId: newUser.locationId,
+  //       workspaceId: newWorkspaceId,
+  //     },
+  //   };
+  // },
+
   signupService: async (
     firstName: string,
     lastName: string | null,
@@ -471,15 +626,18 @@ export const authService = {
       select: { role: true, workspaceId: true },
     });
 
+    // Extract only roles (role names) for response
+    const rolesList = userRoles.map(ur => ur.role);
+
     return {
       token,
       refreshToken,
       user: {
         id: newUser.id,
         email: newUser.email,
-        roles: userRoles.map((ur) => ({ role: ur.role, workspaceId: ur.workspaceId })),
-        locationId: newUser.locationId,
-        workspaceId: newWorkspaceId,
+        roles: rolesList,  // Return just the role names (no workspaceId in roles array)
+        // locationId: newUser.locationId,
+        // workspaceId: newWorkspaceId,  // Return workspaceId separately
       },
     };
   },

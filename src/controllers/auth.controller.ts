@@ -195,10 +195,125 @@ import { CryptoHelper } from '../util/crypto-helper';
 import prisma from '../util/prisma';
 
 export const authController = {
+  // signup: async (req: Request, res: Response, next: NextFunction) => {
+  //   try {
+  //     const { firstName, lastName, email, password, phone, roles, workspaceId, workspace, locationId, location } = req.body;
+
+  //     if (!firstName || !email || !password) {
+  //       return httpResponse(req, res, 400, 'First name, email, and password are required');
+  //     }
+
+  //     if (!/^[a-zA-Z0-9]+$/.test(firstName)) {
+  //       return httpResponse(req, res, 400, 'First name must be alphanumeric');
+  //     }
+
+  //     if (lastName && !/^[a-zA-Z0-9]+$/.test(lastName)) {
+  //       return httpResponse(req, res, 400, 'Last name must be alphanumeric');
+  //     }
+
+  //     if (!/^[\w.-]+@[a-zA-Z\d.-]+\.[a-zA-Z]{2,}$/.test(email)) {
+  //       return httpResponse(req, res, 400, 'Invalid email format');
+  //     }
+
+  //     if (password.length < 6) {
+  //       return httpResponse(req, res, 400, 'Password must be at least 6 characters long');
+  //     }
+
+  //     // Handle roles - default to ["customer"] if not provided
+  //     let rolesEnum: Role[] = [Role.CUSTOMER];
+  //     if (roles) {
+  //       if (!Array.isArray(roles)) {
+  //         return httpResponse(req, res, 400, 'Roles must be an array');
+  //       }
+  //       rolesEnum = roles.map((role: string) => {
+  //         if (!Object.values(Role).includes(role.toUpperCase() as Role)) {
+  //           throw new Error(`Invalid role: ${role}`);
+  //         }
+  //         return role.toUpperCase() as Role;
+  //       });
+  //       if (rolesEnum.length === 0) {
+  //         rolesEnum = [Role.CUSTOMER]; // Default if empty array
+  //       }
+  //     }
+
+  //     // Only allow workspace creation if the role is not customer
+  //     if (workspace && rolesEnum.includes(Role.CUSTOMER)) {
+  //       return httpResponse(req, res, 400, 'Workspace can only be created for non-customer roles');
+  //     }
+
+  //     if (
+  //       rolesEnum.length === 1 &&
+  //       rolesEnum.includes(Role.CUSTOMER) &&
+  //       (workspaceId || workspace)
+  //     ) {
+  //       return httpResponse(req, res, 400, 'Customers cannot be assigned or create a workspace');
+  //     }
+
+  //     if (workspaceId && workspace) {
+  //       return httpResponse(req, res, 400, 'Provide either workspaceId or workspace, not both');
+  //     }
+
+  //     if (workspaceId) {
+  //       const workspaceExists = await prisma.workspace.findUnique({ where: { id: parseInt(workspaceId) } });
+  //       if (!workspaceExists) {
+  //         return httpResponse(req, res, 400, 'Invalid workspace ID');
+  //       }
+  //     }
+
+  //     if (workspace && typeof workspace === 'object') {
+  //       if (!workspace.name || !workspace.slug) {
+  //         return httpResponse(req, res, 400, 'Workspace name and slug are required');
+  //       }
+  //       if (!/^[a-z0-9-]+$/.test(workspace.slug)) {
+  //         return httpResponse(req, res, 400, 'Workspace slug must be lowercase alphanumeric with hyphens');
+  //       }
+  //     }
+
+  //     const userData = await authService.signupService(
+  //       firstName.trim(),
+  //       lastName?.trim() || null,
+  //       email.toLowerCase(),
+  //       password,
+  //       phone ?? null,
+  //       rolesEnum,
+  //       workspaceId ? parseInt(workspaceId) : null,
+  //       workspace ?? null,
+  //       locationId ?? null,
+  //       location ?? null
+  //     );
+  //     // const encryptedResponse = CryptoHelper.encrypt({
+  //     //   message: 'Signup successful',
+  //     //   userData,
+  //     // });
+
+  //     // res.status(200).json({
+  //     //   success: true,
+  //     //   statusCode: 200,
+  //     //   encryptedData: encryptedResponse.encryptedData,
+  //     //   iv: encryptedResponse.iv,
+  //     // });
+  //     httpResponse(req, res, 200, 'Signup successful', userData);
+  //   } catch (err) {
+  //     return httpError(next, err, req);
+  //   }
+  // },
+
   signup: async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { firstName, lastName, email, password, phone, roles, workspaceId, workspace, locationId, location } = req.body;
+      const {
+        firstName,
+        lastName,
+        email,
+        password,
+        phone,
+        roles,
+        workspaceId,
+        workspace,
+        locationId,
+        location
+      } = req.body;
 
+      // Validate required fields
       if (!firstName || !email || !password) {
         return httpResponse(req, res, 400, 'First name, email, and password are required');
       }
@@ -219,24 +334,25 @@ export const authController = {
         return httpResponse(req, res, 400, 'Password must be at least 6 characters long');
       }
 
-      // Handle roles - default to ["customer"] if not provided
-      let rolesEnum: Role[] = [Role.CUSTOMER];
+      // 🧠 Handle roles from frontend
+      let rolesEnum: Role[] = [Role.CUSTOMER]; // Default
       if (roles) {
-        if (!Array.isArray(roles)) {
-          return httpResponse(req, res, 400, 'Roles must be an array');
+        let roleInput: string;
+        if (typeof roles === 'string') {
+          roleInput = roles; // Single role string
+        } else if (Array.isArray(roles) && roles.length > 0) {
+          roleInput = roles[0]; // Use only the first role
+        } else {
+          roleInput = 'CUSTOMER'; // Fallback
         }
-        rolesEnum = roles.map((role: string) => {
-          if (!Object.values(Role).includes(role.toUpperCase() as Role)) {
-            throw new Error(`Invalid role: ${role}`);
-          }
-          return role.toUpperCase() as Role;
-        });
-        if (rolesEnum.length === 0) {
-          rolesEnum = [Role.CUSTOMER]; // Default if empty array
-        }
-      }
 
-      // Only allow workspace creation if the role is not customer
+        const formattedRole = roleInput.toUpperCase();
+        if (!Object.values(Role).includes(formattedRole as Role)) {
+          return httpResponse(req, res, 400, `Invalid role: ${formattedRole}`);
+        }
+
+        rolesEnum = [formattedRole as Role];
+      }
       if (workspace && rolesEnum.includes(Role.CUSTOMER)) {
         return httpResponse(req, res, 400, 'Workspace can only be created for non-customer roles');
       }
@@ -269,6 +385,7 @@ export const authController = {
         }
       }
 
+      // 🧠 Call signupService
       const userData = await authService.signupService(
         firstName.trim(),
         lastName?.trim() || null,
@@ -297,6 +414,7 @@ export const authController = {
       return httpError(next, err, req);
     }
   },
+
   signin: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { email, password } = req.body as SigninRequest;
