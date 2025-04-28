@@ -87,27 +87,41 @@ export const categoryService = {
           name: true,
           slug: true,
           description: true,
-          parentId: true,
+          // parentId: true,
           workspaceId: true,
-          children: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-            },
-          },
+          // children: {
+          //   select: {
+          //     id: true,
+          //     name: true,
+          //     slug: true,
+          //   },
+          // },
           products: {
             select: {
               id: true,
               name: true,
+              variants: {
+                select: {
+                  id: true,
+                  title: true,
+                  sku: true,
+                  price: true,
+                  stock: true,
+                  weight: true,
+                  dimensions: true,
+                  color: true,
+                  size: true,
+                  isAvailable: true,
+                },
+              },
             },
-            take: 10, // Limit the number of products returned
           },
         },
         orderBy: {
           name: 'asc', // Consistent ordering
         },
       });
+
     } catch (error: any) {
       console.error('Error fetching categories:', error.message);
       throw error;
