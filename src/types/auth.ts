@@ -85,3 +85,15 @@ export interface RefreshTokenRequest {
 export interface ForgotPasswordRequest {
   email: string;
 }
+
+export interface SignOptions {
+  algorithm?: string | undefined;
+  expiresIn?: string | number | undefined;
+  notBefore?: string | number | undefined;
+  audience?: string | string[] | undefined;
+  issuer?: string | undefined;
+  subject?: string | undefined;
+  jwtid?: string | undefined;
+  noTimestamp?: boolean | undefined;
+  header?: object | undefined;
+}

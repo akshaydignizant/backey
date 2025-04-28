@@ -613,8 +613,7 @@ export const authService = {
       });
 
     }
-
-    const { token, refreshToken } = generateToken(newUser.id);
+    const { token, refreshToken } = generateToken(newUser.id, roles);
 
     await Promise.all([
       redisClient.setEx(`auth:${newUser.id}`, RedisTTL.ACCESS_TOKEN, token),
@@ -661,12 +660,17 @@ export const authService = {
       throw new Error('Invalid password');
     }
 
+    // Fetch the user's roles
     const userRoles = await prisma.userRole.findMany({
       where: { userId: user.id },
-      select: { role: true, workspaceId: true },
+      select: { role: true },
     });
 
-    const { token, refreshToken } = generateToken(user.id);
+    // Extract only role values (no workspaceId)
+    const roles = Array.from(new Set(userRoles.map((ur) => ur.role)));
+
+    // Generate the token including roles
+    const { token, refreshToken } = generateToken(user.id, roles);
 
     await Promise.all([
       redisClient.setEx(`auth:${user.id}`, RedisTTL.ACCESS_TOKEN, token),
@@ -692,7 +696,13 @@ export const authService = {
       throw new Error('Refresh token is invalid or expired');
     }
 
-    const { token, refreshToken } = generateToken(userId);
+    const userRoles = await prisma.userRole.findMany({
+      where: { userId: userId },
+      select: { role: true, workspaceId: true },
+    });
+    const roles = Array.from(new Set(userRoles.map((ur) => ur.role)));
+
+    const { token, refreshToken } = generateToken(userId, roles);
 
     await Promise.all([
       redisClient.setEx(`auth:${userId}`, RedisTTL.ACCESS_TOKEN, token),
@@ -852,27 +862,16 @@ export const authService = {
   userRoles: async (userId: string) => {
     try {
       const userRoles = await prisma.userRole.findMany({
-        where: { userId }
+        where: { userId },
+        select: { role: true } // Only fetch the role field
       });
 
-      // Define the roles you're interested in
-      const allowedRoles = ["ADMKIN", "CUSD"];
+      // Remove duplicate roles
+      const uniqueRoles = Array.from(new Set(userRoles.map(userRole => userRole.role)));
 
-      // Remove duplicates based on both 'role' and 'workspaceId', and filter by allowed roles
-      const uniqueRoles = Array.from(
-        new Map(
-          userRoles
-            .filter(userRole => allowedRoles.includes(userRole.role))  // Filter roles
-            .map((userRole) => [`${userRole.role}-${userRole.workspaceId}`, userRole])
-        ).values()
-      );
-
-      // Return the list of unique roles
-      return uniqueRoles.map((userRole) => ({
-        role: userRole.role, // Return the role
-      }));
+      return uniqueRoles;
     } catch (error) {
-      console.error(error); // Log original error for debugging
+      console.error(error);
       throw new Error(`Failed to fetch roles for user: ${error}`);
     }
   }

@@ -47,8 +47,15 @@ if (!JWT_SECRET || !JWT_REFRESH_SECRET) {
 const JWT_EXPIRES_IN = '1h';
 const REFRESH_EXPIRES_IN = '7d';
 
-export const generateToken = (userId: string) => {
-  const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
-  const refreshToken = jwt.sign({ userId }, JWT_REFRESH_SECRET, { expiresIn: REFRESH_EXPIRES_IN });
+// export const generateToken = (userId: string) => {
+//   const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+//   const refreshToken = jwt.sign({ userId }, JWT_REFRESH_SECRET, { expiresIn: REFRESH_EXPIRES_IN });
+//   return { token, refreshToken };
+// };
+
+export const generateToken = (userId: string, roles: string[]) => {
+  const token = jwt.sign({ userId, roles }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+  const refreshToken = jwt.sign({ userId, roles }, JWT_REFRESH_SECRET, { expiresIn: REFRESH_EXPIRES_IN });
   return { token, refreshToken };
 };
+

@@ -30,7 +30,7 @@ const router = Router();
  * Product CRUD
  */
 router.post('/:workspaceId/:categoryId', authMiddleware, upload.array('images'), roleRestriction([Role.ADMIN, Role.MANAGER]), createProduct);
-router.get('/:workspaceId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER, Role.STAFF]), getProductsInWorkspace);
+router.get('/:workspaceId', authMiddleware, getProductsInWorkspace);
 router.put('/:workspaceId/:productId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), updateProduct);
 router.delete('/:workspaceId/:productId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), deleteProduct);
 router.delete('/products/:workspaceId', authMiddleware, roleRestriction([Role.ADMIN]), bulkDeleteProducts);

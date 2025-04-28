@@ -683,7 +683,6 @@ export const deleteWorkspaceById = async (req: Request, res: Response, next: Nex
 export const getAdminWorkspaces = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    console.log(req.user?.roles);
     if (!userId) {
       return httpResponse(req, res, 401, 'Unauthorized: Missing user ID.', null);
     }

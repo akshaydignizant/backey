@@ -843,6 +843,7 @@ export const workspaceService = {
       select: {
         id: true,
         name: true,
+        description: true,
         slug: true,
         images: true,
         openingTime: true,

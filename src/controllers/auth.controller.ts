@@ -541,9 +541,9 @@ export const authController = {
 
     try {
       const roles = await authService.userRoles(userId as string);
-      res.status(200).json({ roles });
+      httpResponse(req, res, 200, 'User roles fetched successfully', roles);
     } catch (error) {
-      res.status(500).json({ error: error });
+      httpError(next, error, req, 500);
     }
   },
 };

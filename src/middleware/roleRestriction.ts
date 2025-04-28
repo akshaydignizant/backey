@@ -27,36 +27,35 @@ import httpResponse from '../util/httpResponse'; // your utility to send respons
 const roleRestriction = (allowedRoles: Role[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction): void => {
     const user = req.user;
+    console.log("User roles:", user?.roles); // Debugging line
 
     if (!user || !user.roles || user.roles.length === 0) {
       return httpResponse(req, res, 403, 'Access Denied: No roles assigned');
     }
 
-    // If user is admin in any workspace, allow
-    const isAdmin = user.roles.some((roleObj: { role: Role; workspaceId: number }) =>
-      roleObj.role === Role.ADMIN
-    );
+    // If user has an admin role
+    const isAdmin = user.roles.includes('ADMIN'); // Modify this based on actual role format
+
     if (isAdmin) {
       return next();
     }
 
-    // Otherwise, check for allowed roles in the current workspace
     const currentWorkspaceId = req.params.workspaceId
       ? parseInt(req.params.workspaceId)
       : user.workspaceId; // fallback if not in params
 
-    const hasAllowedRole = user.roles.some((roleObj: { role: Role; workspaceId: number }) =>
-      allowedRoles.includes(roleObj.role) &&
-      roleObj.workspaceId === currentWorkspaceId
+    // Check for allowed roles in the current workspace
+    interface UserRole {
+      role: Role;
+      workspaceId: number;
+    }
+
+    const hasAllowedRole = user.roles.some((role: UserRole) =>
+      allowedRoles.includes(role.role) && role.workspaceId === currentWorkspaceId
     );
 
     if (!hasAllowedRole) {
-      return httpResponse(
-        req,
-        res,
-        403,
-        'Access Denied: You do not have the required permissions'
-      );
+      return httpResponse(req, res, 403, 'Access Denied: You do not have the required permissions');
     }
 
     next();

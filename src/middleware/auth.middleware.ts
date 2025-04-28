@@ -221,8 +221,8 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
             return httpError(next, error, req, 401);
         }
 
-        if (!decoded.userId) {
-            console.log('Invalid token payload: missing userId');
+        if (!decoded.userId || !decoded.roles) {
+            console.log('Invalid token payload: missing userId or roles');
             return httpResponse(req, res, 401, 'Invalid token payload.', 'INVALID_PAYLOAD');
         }
 
@@ -238,48 +238,10 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
             return httpResponse(req, res, 401, 'Invalid or mismatched token.', 'TOKEN_MISMATCH');
         }
 
-        // Fetch user roles from UserRole table
-        const workspaceId = req.headers['x-workspace-id'] as string | undefined;
-        let roles: { role: Role; workspaceId: number | null }[] = [];
-
-        if (workspaceId) {
-            if (isNaN(parseInt(workspaceId))) {
-                return httpResponse(req, res, 400, 'Invalid workspace ID.', 'INVALID_WORKSPACE_ID');
-            }
-            const userRoles = await prisma.userRole.findMany({
-                where: {
-                    userId: decoded.userId,
-                    workspaceId: parseInt(workspaceId),
-                },
-                select: { role: true, workspaceId: true },
-            });
-            roles = userRoles.map((ur) => ({
-                role: ur.role,
-                workspaceId: ur.workspaceId,
-            }));
-            if (roles.length === 0) {
-                console.log(`No roles found for user ${decoded.userId} in workspace ${workspaceId}`);
-                return httpResponse(req, res, 403, 'No roles assigned in this workspace.', 'NO_ROLES');
-            }
-        } else {
-            const userRoles = await prisma.userRole.findMany({
-                where: { userId: decoded.userId },
-                select: { role: true, workspaceId: true },
-            });
-            roles = userRoles.map((ur) => ({
-                role: ur.role,
-                workspaceId: ur.workspaceId,
-            }));
-            // Optional: Require workspaceId for routes needing specific roles
-            // if (roles.length === 0) {
-            //   return httpResponse(req, res, 403, 'No roles assigned to user.', 'NO_ROLES');
-            // }
-        }
-
-        // Attach userId and roles to the request
+        // Attach userId and roles (only roles) to the request
         req.user = {
             userId: decoded.userId,
-            roles,
+            roles: decoded.roles,  // Just the roles array
         };
 
         next();
@@ -288,3 +250,4 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
         return httpError(next, error, req, 401);
     }
 };
+
