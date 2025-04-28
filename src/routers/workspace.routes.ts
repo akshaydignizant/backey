@@ -82,7 +82,7 @@ router.patch(
 router.get(
   '/',
   authMiddleware,
-  roleRestriction([Role.ADMIN, Role.MANAGER]),
+  // roleRestriction([Role.ADMIN, Role.MANAGER]),
   searchWorkspaces
 );
 
