@@ -100,6 +100,7 @@ export const categoryService = {
             select: {
               id: true,
               name: true,
+              images: true,
               variants: {
                 select: {
                   id: true,
