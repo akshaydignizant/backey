@@ -334,7 +334,6 @@ export const authController = {
         return httpResponse(req, res, 400, 'Password must be at least 6 characters long');
       }
 
-      // 🧠 Handle roles from frontend
       let rolesEnum: Role[] = [Role.CUSTOMER]; // Default
       if (roles) {
         let roleInput: string;
@@ -385,7 +384,6 @@ export const authController = {
         }
       }
 
-      // 🧠 Call signupService
       const userData = await authService.signupService(
         firstName.trim(),
         lastName?.trim() || null,
@@ -542,6 +540,15 @@ export const authController = {
     try {
       const roles = await authService.userRoles(userId as string);
       httpResponse(req, res, 200, 'User roles fetched successfully', roles);
+    } catch (error) {
+      httpError(next, error, req, 500);
+    }
+  },
+  getUserDetails: async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const userId = req.user?.userId;
+    try {
+      const user = await authService.getUserDetails(userId as string);
+      httpResponse(req, res, 200, 'User details fetched successfully', user);
     } catch (error) {
       httpError(next, error, req, 500);
     }

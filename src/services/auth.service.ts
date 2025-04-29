@@ -874,6 +874,40 @@ export const authService = {
       console.error(error);
       throw new Error(`Failed to fetch roles for user: ${error}`);
     }
-  }
+  },
+  getUserDetails: async (userId: string) => {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          status: true,
+          profileImageUrl: true,
+          locationId: true,
+          location: {
+            select: {
+              id: true,
+              name: true,
+              address: true,
+              city: true,
+              region: true,
+              country: true,
+            },
+          },
+          updatedAt: true,
+        },
+      });
 
+      return {
+        ...user
+      };
+    } catch (error) {
+      console.error(error);
+      throw new Error(`Failed to fetch user details: ${error}`);
+    }
+  }
 };
