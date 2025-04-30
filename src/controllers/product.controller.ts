@@ -8,7 +8,7 @@ import { ProductInput } from '../types/product';
 export const createProduct = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { categoryId } = req.params;
   const workspaceId = parseInt(req.params.workspaceId);
-  const { name, description, stockQuantity } = req.body;
+  const { name, description, variants } = req.body;
   const images = req.files ? (req.files as Express.Multer.File[]).map((file) => file.path) : [];
 
   if (isNaN(workspaceId)) {
@@ -16,7 +16,6 @@ export const createProduct = async (req: Request, res: Response, next: NextFunct
   }
 
   try {
-    // Validate inputs
     if (!name?.trim()) {
       return httpResponse(req, res, 400, 'Product name is required');
     }
@@ -24,18 +23,16 @@ export const createProduct = async (req: Request, res: Response, next: NextFunct
       return httpResponse(req, res, 400, 'Product description is required');
     }
 
-    // Prepare the product input without variants
     const productInput: ProductInput = {
       name,
       description,
-      isActive: true,  // Assuming default is true
+      isActive: true,
       images,
+      variants: Array.isArray(variants) ? variants : [], // safely cast
     };
 
-    // Call the service to create the product
     const product = await productService.createProduct(workspaceId, categoryId, productInput);
 
-    // Send response back with the created product, including category name
     return httpResponse(req, res, 201, 'Product created', product);
   } catch (err) {
     return httpError(next, err, req, 400);

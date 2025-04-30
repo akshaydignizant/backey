@@ -25,6 +25,9 @@ import {
   getOrdersByDateRangeController,
   getAllOrderItems,
 } from '../controllers/order.controller';
+import { createCheckoutSession, orderConfirmation, paymentCancelled, paymentSuccess } from '../controllers/payment.controller';
+import { handleStripeWebhook } from '../controllers/webhookController';
+import express from 'express';
 
 const router = Router();
 
@@ -32,6 +35,15 @@ const router = Router();
  * Basic Order Operations
  */
 router.post('/workspaces/:workspaceId/orders', authMiddleware, createOrder);
+
+
+
+router.post('/checkout', createCheckoutSession); // Initiates Stripe Checkout
+router.get('/payment-success', paymentSuccess);
+router.get('/payment-cancelled', paymentCancelled);
+router.get('/order-confirmation', orderConfirmation);
+
+router.post('/webhook', express.raw({ type: 'application/json' }), handleStripeWebhook); // Stripe Webhook
 router.get('/workspaces/:workspaceId/orders', authMiddleware, getOrders);
 router.get('/workspaces/:workspaceId/orders/:orderId', authMiddleware, getOrder);
 router.patch('/workspaces/:workspaceId/orders/:orderId', authMiddleware, updateOrder);

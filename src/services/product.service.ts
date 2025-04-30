@@ -34,19 +34,15 @@ const getUniqueSlug = async (baseSlug: string): Promise<string> => {
 export const productService = {
   createProduct: async (workspaceId: number, categoryId: string, data: ProductInput) => {
     try {
-      // Validate inputs
       if (!workspaceId) throw new Error('Invalid workspaceId');
       if (!categoryId) throw new Error('Invalid categoryId');
       if (!data.name?.trim()) throw new Error('Invalid product name');
 
-      // Generate a unique slug
       const baseSlug = generateSlug(data.name);
       const slug = await getUniqueSlug(baseSlug);
+      const { variants = [], ...productData } = data;
 
-      // Extract variants from the input and remove them from product data
-      const { variants, ...productData } = data;
-
-      // Create the product without variants
+      // Create product
       const createdProduct = await prisma.product.create({
         data: {
           ...productData,
@@ -55,19 +51,28 @@ export const productService = {
           slug,
           images: Array.isArray(productData.images) ? productData.images : [],
         },
+      });
+
+      // Create variants
+      if (variants.length > 0) {
+        await prisma.productVariant.createMany({
+          data: variants.map((variant) => ({
+            ...variant,
+            productId: createdProduct.id,
+          })),
+        });
+      }
+
+      // Return product with variants
+      const fullProduct = await prisma.product.findUnique({
+        where: { id: createdProduct.id },
         include: {
-          category: {
-            select: {
-              id: true,  // Only include id and name in the category
-              name: true,
-            },
-          },
+          category: { select: { id: true, name: true } },
+          variants: true,
         },
       });
 
-      return {
-        ...createdProduct,
-      };
+      return fullProduct;
     } catch (error) {
       logger.error('Error creating product:', error);
       throw new Error('Failed to create product');
@@ -80,124 +85,137 @@ export const productService = {
         throw new Error('Invalid workspaceId');
       }
 
-      // Add logging to indicate the start of the query and workspaceId
-      logger.info(`Fetching products for workspaceId: ${workspaceId}, Page: ${page}, PageSize: ${pageSize}`);
+      logger.info(`Fetching active products for workspaceId: ${workspaceId}, Page: ${page}, PageSize: ${pageSize}`);
 
       const products = await prisma.product.findMany({
-        where: { workspaceId },
-        include: {
-          category: {
-            select: {
-              id: true,  // Only include id and name in the category
-              name: true,
-            },
-          },
-          // variants: true,
+        where: {
+          workspaceId,
+          isActive: true, // Only fetch active products
         },
-        skip: (page - 1) * pageSize, // Pagination: skip products based on current page
-        take: pageSize, // Limit the number of products per page
-      });
-
-      if (!products || products.length === 0) {
-        logger.warn(`No products found for workspaceId: ${workspaceId}`);
-      }
-
-      return products;
-    } catch (error) {
-      // Log the error with more context
-      logger.error(`Error fetching products for workspaceId: ${workspaceId}. Error: ${error}`);
-      throw new Error('Failed to fetch products');
-    }
-  },
-
-
-  updateProduct: async (workspaceId: number, productId: string, data: Partial<ProductInput>) => {
-    try {
-      if (!workspaceId || !productId) throw new Error('Invalid workspaceId or productId');
-
-      const product = await prisma.product.findUnique({ where: { id: productId } });
-      if (!product) throw new Error(`Product with ID ${productId} not found`);
-
-      // Only allow updatable fields
-      const updateData: Prisma.ProductUpdateInput = {
-        name: data.name,
-        description: data.description,
-        category: data.categoryId
-          ? { connect: { id: data.categoryId } }
-          : undefined,
-        images: data.images,
-        updatedAt: new Date(),
-      };
-
-      return await prisma.product.update({
-        where: { id: productId },
-        data: updateData,
         include: {
-          category: {
-            select: {
-              id: true,  // Only include id and name in the category
-              name: true,
-            },
-          },
-          variants: true,
-        },
-      });
-    } catch (error) {
-      logger.error('Error updating product:', error);
-      throw new Error('Failed to update product');
-    }
-  },
-
-  deleteProduct: async (workspaceId: number, productId: string) => {
-    try {
-      // Check for valid input
-      if (!workspaceId || !productId || typeof productId !== 'string') {
-        throw new Error('Invalid workspaceId or productId');
-      }
-
-      // Fetch the product details, including images and variants
-      const product = await prisma.product.findUnique({
-        where: { id: productId },
-        select: {
-          images: true,
-          variants: true,
           category: {
             select: {
               id: true,
               name: true,
             },
           },
+          // variants: true,
+        },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      });
+
+      if (!products || products.length === 0) {
+        logger.warn(`No active products found for workspaceId: ${workspaceId}`);
+      }
+
+      return products;
+    } catch (error) {
+      logger.error(`Error fetching active products for workspaceId: ${workspaceId}. Error: ${error}`);
+      throw new Error('Failed to fetch products');
+    }
+  },
+
+
+
+  updateProduct: async (workspaceId: number, productId: string, data: Partial<ProductInput>) => {
+    try {
+      if (!workspaceId || !productId) throw new Error('Invalid workspaceId or productId');
+
+      const product = await prisma.product.findUnique({
+        where: { id: productId },
+        include: { variants: true },
+      });
+
+      if (!product) throw new Error(`Product with ID ${productId} not found`);
+
+      // Extract variants if any
+      const { variants, ...productData } = data;
+
+      const updateData: Prisma.ProductUpdateInput = {
+        name: productData.name,
+        description: productData.description,
+        category: productData.categoryId
+          ? { connect: { id: productData.categoryId } }
+          : undefined,
+        images: productData.images,
+        updatedAt: new Date(),
+      };
+
+      // Update the product
+      const updatedProduct = await prisma.product.update({
+        where: { id: productId },
+        data: updateData,
+      });
+
+      // Replace all existing variants if new variants provided
+      if (variants && Array.isArray(variants)) {
+        // Delete old variants
+        await prisma.productVariant.deleteMany({
+          where: { productId },
+        });
+
+        // Create new variants
+        if (variants.length > 0) {
+          await prisma.productVariant.createMany({
+            data: variants.map((variant) => ({
+              ...variant,
+              productId,
+            })),
+          });
+        }
+      }
+
+      // Return product with category and variants
+      return await prisma.product.findUnique({
+        where: { id: productId },
+        include: {
+          category: { select: { id: true, name: true } },
+          variants: true,
         },
       });
 
-      // If no product found, throw error
+    } catch (error) {
+      logger.error('Error updating product:', error);
+      throw new Error('Failed to update product');
+    }
+  },
+  deleteProduct: async (workspaceId: number, productId: string) => {
+    try {
+      // Validate input
+      if (!workspaceId || !productId || typeof productId !== 'string') {
+        throw new Error('Invalid workspaceId or productId');
+      }
+
+      // Fetch the product
+      const product = await prisma.product.findUnique({
+        where: { id: productId },
+        select: {
+          id: true,
+        },
+      });
+
       if (!product) {
         throw new Error(`Product with ID ${productId} not found`);
       }
 
-      // Delete related images from Cloudinary if they exist
-      if (product.images && Array.isArray(product.images)) {
-        for (let imageUrl of product.images) {
-          const publicId = extractPublicIdFromCloudinaryUrl(imageUrl);
-          await deleteImageFromCloudinary(publicId); // Delete image from Cloudinary
-        }
-      }
-
-      // Delete related variants from the database
-      await prisma.productVariant.deleteMany({
-        where: {
-          productId: productId,
+      // Soft-delete: Mark product and its variants as inactive
+      await prisma.product.update({
+        where: { id: productId },
+        data: {
+          isActive: false,
+          updatedAt: new Date(),
+          variants: {
+            updateMany: {
+              where: {},
+              data: { isAvailable: false },
+            },
+          },
         },
       });
 
-      // Finally, delete the product itself
-      const deletedProduct = await prisma.product.delete({
-        where: { id: productId },
-      });
-
-      return deletedProduct;
+      return { message: 'Product soft-deleted successfully' };
     } catch (error) {
-      // Log the error for tracking
       logger.error('Error deleting product: ', error);
       throw new Error('Failed to delete product');
     }
@@ -208,46 +226,45 @@ export const productService = {
         throw new Error('Invalid workspaceId or productIds');
       }
 
-      // Fetch the products to ensure they exist and belong to the given workspace
+      // Verify products exist and belong to the workspace
       const products = await prisma.product.findMany({
         where: {
-          id: { in: productIds },  // Find products by the given productIds
-          workspaceId: workspaceId, // Ensure they belong to the correct workspace
+          id: { in: productIds },
+          workspaceId,
         },
-        include: {
-          variants: true,
-          category: {
-            select: {
-              id: true,  // Only include id and name in the category
-              name: true,
-            },
-          },
-        },
+        select: { id: true },
       });
 
       if (products.length === 0) {
         throw new Error('No products found or products do not belong to the workspace');
       }
 
-      // Delete all variants for the given products
-      await prisma.productVariant.deleteMany({
+      // Soft-delete variants
+      await prisma.productVariant.updateMany({
         where: {
           productId: { in: productIds },
         },
-      });
-
-      // Delete the products
-      const deletedProducts = await prisma.product.deleteMany({
-        where: {
-          id: { in: productIds },
-          workspaceId: workspaceId,
+        data: {
+          isAvailable: false,
         },
       });
 
-      return deletedProducts;
+      // Soft-delete products
+      const updatedProducts = await prisma.product.updateMany({
+        where: {
+          id: { in: productIds },
+          workspaceId,
+        },
+        data: {
+          isActive: false,
+          updatedAt: new Date(),
+        },
+      });
+
+      return updatedProducts;
     } catch (error) {
-      logger.error('Error deleting products: ', error);
-      throw new Error('Failed to delete products');
+      logger.error('Error soft-deleting products: ', error);
+      throw new Error('Failed to soft-delete products');
     }
   },
 

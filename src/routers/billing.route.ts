@@ -3,10 +3,6 @@ import { billController } from '../controllers/billing.controller';
 
 const router = Router();
 
-/**
- * Bill Routes
- */
-
 // Create a new bill
 router.post('/', billController.createBill);
 

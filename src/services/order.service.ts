@@ -7,6 +7,7 @@ import sendEmail from '../util/sendEmail';
 import logger from '../util/logger';
 import { buildOrderNotificationEmail } from '../util/notifyAdminsAndManagers';
 import { log } from 'console';
+import Stripe from 'stripe';
 
 const prisma = new PrismaClient();
 // export const createOrder = async (
@@ -240,34 +241,61 @@ export const createOrder = async (
   workspaceId: number,
   data: {
     userId: string;
-    shippingAddressId: string;
-    billingAddressId: string;
+    shippingAddressId?: string;
+    billingAddressId?: string;
+    shippingAddress?: any;
+    billingAddress?: any;
     paymentMethod: PaymentMethod;
-    items: { variantId: string; quantity: number }[]; // Removed price from input
+    items: { variantId: string; quantity: number }[];
     notes?: string;
+    status?: OrderStatus;
   },
   authUserId: string
 ) => {
   try {
-    // Batch validate workspace, user, and addresses
-    const [workspace, user, addresses] = await Promise.all([
-      prisma.workspace.findUnique({ where: { id: workspaceId }, select: { id: true, name: true } }),
-      prisma.user.findUnique({
+    // Batch validate workspace and user
+    const [workspace, user] = await Promise.all([
+      prisma.workspace.findUniqueOrThrow({
+        where: { id: workspaceId },
+        select: { id: true, name: true },
+      }),
+      prisma.user.findUniqueOrThrow({
         where: { id: data.userId },
         select: { id: true, email: true, firstName: true, lastName: true },
       }),
-      prisma.address.findMany({
-        where: { id: { in: [data.shippingAddressId, data.billingAddressId] } },
-        select: { id: true, address: true, street: true, city: true, region: true, postalCode: true, country: true },
-      }),
     ]);
 
-    if (!workspace) throw new Error('Workspace not found');
-    if (!user) throw new Error('User not found');
-    if (addresses.length !== 2) throw new Error('Invalid shipping or billing address');
+    // Parallelize address creation/validation
+    let finalShippingAddressId = data.shippingAddressId;
+    let finalBillingAddressId = data.billingAddressId;
 
-    const shippingAddress = addresses.find(a => a.id === data.shippingAddressId)!;
-    const billingAddress = addresses.find(a => a.id === data.billingAddressId)!;
+    const addressPromises: Promise<any>[] = [];
+    if (!finalShippingAddressId && data.shippingAddress) {
+      addressPromises.push(
+        prisma.address.create({
+          data: { ...data.shippingAddress, userId: data.userId },
+        }).then(created => (finalShippingAddressId = created.id))
+      );
+    }
+    if (!finalBillingAddressId && data.billingAddress) {
+      addressPromises.push(
+        prisma.address.create({
+          data: { ...data.billingAddress, userId: data.userId },
+        }).then(created => (finalBillingAddressId = created.id))
+      );
+    }
+    await Promise.all(addressPromises);
+
+    // Validate addresses if IDs provided
+    if (finalShippingAddressId || finalBillingAddressId) {
+      const addressIds = [finalShippingAddressId, finalBillingAddressId].filter(Boolean) as string[];
+      const addresses = await prisma.address.findMany({
+        where: { id: { in: addressIds } },
+      });
+      if (addresses.length !== addressIds.length) {
+        throw new Error('Invalid shipping or billing address');
+      }
+    }
 
     // Validate product variants and stock
     const variantIds = data.items.map(i => i.variantId);
@@ -281,11 +309,13 @@ export const createOrder = async (
     for (const item of data.items) {
       const variant = variantMap.get(item.variantId);
       if (!variant) throw new Error(`Variant ${item.variantId} not found`);
-      if (item.quantity > variant.stock) stockErrors.push(`Insufficient stock for ${variant.product.name} (${variant.title})`);
+      if (item.quantity > variant.stock) {
+        stockErrors.push(`Insufficient stock for ${variant.product.name} (${variant.title})`);
+      }
     }
     if (stockErrors.length) throw new Error(stockErrors.join(', '));
 
-    // Calculate totalAmount using variant.price from DB
+    // Calculate totalAmount
     const totalAmount = data.items.reduce((sum, item) => {
       const variant = variantMap.get(item.variantId)!;
       return sum + item.quantity * variant.price;
@@ -298,9 +328,10 @@ export const createOrder = async (
           data: {
             userId: data.userId,
             workspaceId,
-            shippingAddressId: data.shippingAddressId,
-            billingAddressId: data.billingAddressId,
+            shippingAddressId: finalShippingAddressId!,
+            billingAddressId: finalBillingAddressId!,
             paymentMethod: data.paymentMethod,
+            status: data.status || 'PENDING',
             totalAmount,
             notes: data.notes,
             items: {
@@ -308,7 +339,7 @@ export const createOrder = async (
                 data: data.items.map(item => ({
                   variantId: item.variantId,
                   quantity: item.quantity,
-                  price: variantMap.get(item.variantId)!.price, // Use DB price
+                  price: variantMap.get(item.variantId)!.price,
                 })),
               },
             },
@@ -324,16 +355,21 @@ export const createOrder = async (
           },
         });
 
-        // Update stock for each variant
-        await Promise.all(
-          data.items.map(item =>
-            tx.productVariant.update({
-              where: { id: item.variantId },
-              data: { stock: { decrement: item.quantity } },
-            })
-          )
-        );
-
+        // Update stock if necessary
+        if (data.paymentMethod === 'CASH' || data.status === 'PROCESSING') {
+          await Promise.all(
+            data.items.map(item =>
+              tx.productVariant.update({
+                where: { id: item.variantId },
+                data: {
+                  stock: {
+                    decrement: item.quantity
+                  }
+                }
+              })
+            )
+          );
+        }
         return newOrder;
       },
       { maxWait: 5000, timeout: 10000 }
@@ -350,44 +386,103 @@ export const createOrder = async (
       },
     });
 
-    // Fetch recipients for notifications
+    // Fetch recipients
     const recipients = await prisma.user.findMany({
       where: {
-        UserRole: { some: { workspaceId, role: { in: [Role.ADMIN, Role.MANAGER] } } },
+        UserRole: { some: { workspaceId, role: { in: [Role.ADMIN, Role.MANAGER, Role.CUSTOMER] } } },
       },
       select: { id: true, email: true, firstName: true, lastName: true },
     });
 
-    // Format address and email content
-    const formatAddress = (address: typeof shippingAddress) =>
-      `${address.address}, ${address.street || ''}, ${address.city}, ${address.region}, ${address.postalCode}, ${address.country}`;
+    // Format address
+    const formatAddress = (address: { address: string; street?: string | null; city: string; region: string; postalCode: string; country: string }) =>
+      `${address.address}${address.street ? `, ${address.street}` : ''}, ${address.city}, ${address.region}, ${address.postalCode}, ${address.country}`;
 
+    // Generate HTML email content
     const itemsList = order.items
-      .map(item => `- ${item.variant.product.name} (${item.variant.title}): ${item.quantity} x $${item.price} = $${(item.quantity * item.price).toFixed(2)}`)
-      .join('\n');
+      .map(item => ({
+        name: `${item.variant.product.name} (${item.variant.title})`,
+        quantity: item.quantity,
+        price: item.price,
+        total: (item.quantity * item.price).toFixed(2),
+      }));
 
-    const emailContent = `
-Hello,
-
-A new order (ID: ${order.id}) was placed by ${user.firstName} ${user.lastName || ''} in workspace ${workspace.name}.
-
-**Order Details:**
-- Order ID: ${order.id}
-- Total Amount: $${order.totalAmount.toFixed(2)}
-- Payment Method: ${order.paymentMethod}
-- Status: ${order.status}
-- Notes: ${order.notes || 'None'}
-
-**Items:**
-${itemsList}
-
-**Shipping Address:**
-${formatAddress(order.shippingAddress)}
-
-**Billing Address:**
-${formatAddress(order.billingAddress)}
-
-Login to the dashboard to process this order.
+    const emailTemplate = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>New Order Confirmation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+  <div class="max-w-2xl mx-auto bg-white p-8 mt-10 rounded-lg shadow-md">
+    <div class="text-center">
+      <h1 class="text-2xl font-bold text-gray-800">New Order Confirmation</h1>
+      <p class="text-gray-600 mt-2">Order ID: ${order.id}</p>
+    </div>
+    <div class="mt-6">
+      <h2 class="text-lg font-semibold text-gray-700">Order Details</h2>
+      <div class="mt-4 space-y-2">
+        <p><strong>Placed by:</strong> ${user.firstName} ${user.lastName || ''}</p>
+        <p><strong>Workspace:</strong> ${workspace.name}</p>
+        <p><strong>Total Amount:</strong> $${order.totalAmount.toFixed(2)}</p>
+        <p><strong>Payment Method:</strong> ${order.paymentMethod}</p>
+        <p><strong>Status:</strong> ${order.status}</p>
+        <p><strong>Notes:</strong> ${order.notes || 'None'}</p>
+      </div>
+    </div>
+    <div class="mt-6">
+      <h2 class="text-lg font-semibold text-gray-700">Items</h2>
+      <table class="w-full mt-4 border-collapse">
+        <thead>
+          <tr class="bg-gray-200">
+            <th class="p-2 text-left">Item</th>
+            <th class="p-2 text-right">Quantity</th>
+            <th class="p-2 text-right">Price</th>
+            <th class="p-2 text-right">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsList
+        .map(
+          item => `
+                <tr class="border-b">
+                  <td class="p-2">${item.name}</td>
+                  <td class="p-2 text-right">${item.quantity}</td>
+                  <td class="p-2 text-right">$${item.price.toFixed(2)}</td>
+                  <td class="p-2 text-right">$${item.total}</td>
+                </tr>
+              `
+        )
+        .join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="mt-6">
+      <h2 class="text-lg font-semibold text-gray-700">Shipping Address</h2>
+      <p class="mt-2 text-gray-600">${formatAddress(order.shippingAddress)}</p>
+    </div>
+    <div class="mt-6">
+      <h2 class="text-lg font-semibold text-gray-700">Billing Address</h2>
+      <p class="mt-2 text-gray-600">${formatAddress(order.billingAddress)}</p>
+    </div>
+    <div class="mt-6 text-center">
+      <a
+        href="https://your-dashboard-url.com/orders/${order.id}"
+        class="inline-block bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700"
+      >
+        View Order in Dashboard
+      </a>
+    </div>
+    <div class="mt-8 text-center text-gray-500 text-sm">
+      <p>Thank you for choosing us!</p>
+      <p>&copy; ${new Date().getFullYear()} Your Company Name. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>
 `;
 
     // Send emails concurrently
@@ -397,7 +492,7 @@ Login to the dashboard to process this order.
         sendEmail(
           r.email,
           `🧾 New Order: ${workspace.name} (Order ID: ${order.id})`,
-          emailContent
+          emailTemplate,
         ).catch(err => {
           console.error(`Failed to send email to ${r.email}:`, err);
           return null;
@@ -410,7 +505,7 @@ Login to the dashboard to process this order.
         sendEmail(
           user.email,
           `🧾 Your Order Receipt: ${workspace.name} (Order ID: ${order.id})`,
-          `Dear ${user.firstName},\n\nThank you for your order!\n\n${emailContent}`
+          emailTemplate.replace('New Order Confirmation', `Thank You for Your Order, ${user.firstName}!`)
         ).catch(err => {
           console.error(`Failed to send email to customer ${user.email}:`, err);
           return null;
@@ -427,7 +522,7 @@ Login to the dashboard to process this order.
       totalAmount: order.totalAmount,
       status: order.status,
       itemCount: order.items.length,
-      message: 'Order placed successfully',
+      message: data.status === 'PENDING' ? 'Order created pending payment' : 'Order placed successfully',
     };
   } catch (error: any) {
     console.error('CreateOrder Error:', error);
@@ -452,6 +547,61 @@ export const getOrder = async (workspaceId: number, orderId: string, authUserId:
   });
   if (!order) throw new Error('Order not found');
   return order;
+};
+
+export const getOrderPreview = async (workspaceId: number, items: any[], userId: string) => {
+  const variants = await prisma.productVariant.findMany({
+    where: {
+      id: {
+        in: items.map((item) => String(item.variantId)), // Convert to string
+      },
+    },
+    include: {
+      product: true,
+    },
+  });
+
+  const lineItems = variants.map(v => {
+    const quantity = items.find(i => i.variantId === v.id)?.quantity || 1;
+    return {
+      price_data: {
+        currency: 'usd',
+        product_data: {
+          name: `${v.product.name} (${v.title})`
+        },
+        unit_amount: Math.round(v.price * 100)
+      },
+      quantity
+    };
+  });
+
+  return { lineItems };
+};
+
+export const createFinalOrderFromSession = async (session: Stripe.Checkout.Session) => {
+  if (!session.metadata) {
+    throw new Error("Session metadata is missing");
+  }
+  const userId = session.metadata.userId;
+  const workspaceId = Number(session.metadata.workspaceId);
+  const items = JSON.parse(session.metadata.items);
+  const shippingAddress = JSON.parse(session.metadata.shippingAddress);
+  const billingAddress = JSON.parse(session.metadata.billingAddress);
+
+  // Save addresses
+  const [shipping, billing] = await Promise.all([
+    prisma.address.create({ data: { ...shippingAddress, userId } }),
+    prisma.address.create({ data: { ...billingAddress, userId } })
+  ]);
+
+  // Reuse your existing order creation logic
+  return createOrder(workspaceId, {
+    userId,
+    shippingAddressId: shipping.id,
+    billingAddressId: billing.id,
+    paymentMethod: PaymentMethod.STRIPE,
+    items,
+  }, userId);
 };
 
 export const updateOrder = async (

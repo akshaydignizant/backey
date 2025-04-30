@@ -80,6 +80,8 @@ import ReportRoutes from './routers/report.routes'
 import inventoryRoutes from './routers/inventory.routes'
 import notificationRoutes from './routers/notification.routes'
 import billRoutes from './routers/billing.route'
+// import paymentRoutes from './routers/payment.routes'
+// import razorpayWebhookRoute from './routers/razorpayWebhookRoute'
 import dotenv from 'dotenv'
 dotenv.config()
 
@@ -89,13 +91,17 @@ export const prisma = new PrismaClient()
 
 // Middleware
 app.use(helmet())
-app.use(
-  cors({
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD'],
-    origin: ['http://localhost:3000', " https://30f3-2402-a00-162-ea17-7193-a897-79b2-4a7a.ngrok-free.app"], // adjust this for dev as needed
-    credentials: true,
-  })
-)
+// app.use(
+//   cors({
+//     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD'],
+//     origin: ['http://localhost:3000', "https://0bc94a167d659b.lhr.life"], // adjust this for dev as needed
+//     credentials: true,
+//   })
+// )
+app.use(cors({
+  origin: ['http://localhost:3000', '*', 'https://0bc94a167d659b.lhr.life'],
+  credentials: true, // if you're using cookies or auth headers
+}));
 // app.use(cors());
 
 app.use(express.json())
@@ -116,6 +122,8 @@ app.use('/api/v1/reports', ReportRoutes)
 app.use('/api/v1/inventory', inventoryRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use("/api/v1/bills", billRoutes);
+// app.use('/api/v1/payment', paymentRoutes);
+// app.use('/api/payment', razorpayWebhookRoute);
 
 // 404 Handler
 app.use((req: Request, _: Response, next: NextFunction) => {

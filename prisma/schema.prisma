@@ -47,15 +47,15 @@ model User {
 }
 
 model Workspace {
-  id          Int        @id @default(autoincrement())
-  name        String     @unique
-  slug        String     @unique
-  description String?
-  images      String[]   @default([])
-  openingTime String?
-  closingTime String?
-  UserRole    UserRole[]
-
+  id              Int              @id @default(autoincrement())
+  name            String           @unique
+  slug            String           @unique
+  description     String?
+  images          String[]         @default([])
+  openingTime     String?
+  closingTime     String?
+  UserRole        UserRole[]
+  isDeleted       Boolean          @default(false)
   isActive        Boolean          @default(true)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -195,6 +195,9 @@ model Order {
   placedAt           DateTime             @default(now())
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
+  stripeSessionId    String?
+  paidAt             DateTime?
+  paymentDetails     Json?
   billingAddress     Address              @relation("BillingAddress", fields: [billingAddressId], references: [id])
   shippingAddress    Address              @relation("ShippingAddress", fields: [shippingAddressId], references: [id])
   user               User                 @relation(fields: [userId], references: [id])
@@ -354,6 +357,8 @@ enum PaymentMethod {
   MPESA
   EMOLA
   CASH
+  STRIPE
+  CREDIT_CARD
 }
 
 enum OrderStatus {

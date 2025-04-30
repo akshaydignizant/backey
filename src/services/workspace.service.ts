@@ -898,6 +898,45 @@ export const workspaceService = {
     return workspace;
   },
 
+  // deleteWorkspaces: async (workspaceIds: number[], userId: string) => {
+  //   const workspaces = await prisma.workspace.findMany({
+  //     where: {
+  //       id: { in: workspaceIds },
+  //       UserRole: {
+  //         some: {
+  //           userId,
+  //           role: Role.ADMIN,
+  //         },
+  //       },
+  //     },
+  //     select: { id: true },
+  //   });
+
+  //   const foundIds = workspaces.map(ws => ws.id);
+  //   const notFoundIds = workspaceIds.filter(id => !foundIds.includes(id));
+
+  //   if (notFoundIds.length > 0) {
+  //     throw new Error(`Some workspaces not found or not owned by user: ${notFoundIds.join(', ')}`);
+  //   }
+
+  //   await prisma.$transaction([
+  //     prisma.rolePermission.deleteMany({
+  //       where: { workspaceId: { in: workspaceIds } },
+  //     }),
+  //     prisma.category.deleteMany({
+  //       where: { workspaceId: { in: workspaceIds } },
+  //     }),
+  //     prisma.invitation.deleteMany({
+  //       where: { workspaceId: { in: workspaceIds } },
+  //     }),
+  //     prisma.userRole.deleteMany({
+  //       where: { workspaceId: { in: workspaceIds } },
+  //     }),
+  //     prisma.workspace.deleteMany({
+  //       where: { id: { in: workspaceIds } },
+  //     }),
+  //   ]);
+  // },
   deleteWorkspaces: async (workspaceIds: number[], userId: string) => {
     const workspaces = await prisma.workspace.findMany({
       where: {
@@ -919,24 +958,38 @@ export const workspaceService = {
       throw new Error(`Some workspaces not found or not owned by user: ${notFoundIds.join(', ')}`);
     }
 
-    await prisma.$transaction([
-      prisma.rolePermission.deleteMany({
-        where: { workspaceId: { in: workspaceIds } },
-      }),
-      prisma.category.deleteMany({
-        where: { workspaceId: { in: workspaceIds } },
-      }),
-      prisma.invitation.deleteMany({
-        where: { workspaceId: { in: workspaceIds } },
-      }),
-      prisma.userRole.deleteMany({
-        where: { workspaceId: { in: workspaceIds } },
-      }),
-      prisma.workspace.deleteMany({
-        where: { id: { in: workspaceIds } },
-      }),
-    ]);
+    // Soft delete instead of actual delete
+    await prisma.workspace.updateMany({
+      where: {
+        id: { in: foundIds },
+      },
+      data: {
+        isDeleted: true,
+        isActive: false,
+      },
+    });
   },
+  // deleteWorkspaceById: async (workspaceId: number, userId: string): Promise<void> => {
+  //   const userRole = await prisma.userRole.findFirst({
+  //     where: {
+  //       userId,
+  //       workspaceId,
+  //       role: Role.ADMIN,
+  //     },
+  //   });
+
+  //   if (!userRole) {
+  //     throw new Error('You are not authorized to delete this workspace.');
+  //   }
+
+  //   await prisma.$transaction([
+  //     prisma.rolePermission.deleteMany({ where: { workspaceId } }),
+  //     prisma.category.deleteMany({ where: { workspaceId } }),
+  //     prisma.invitation.deleteMany({ where: { workspaceId } }),
+  //     prisma.userRole.deleteMany({ where: { workspaceId } }),
+  //     prisma.workspace.delete({ where: { id: workspaceId } }),
+  //   ]);
+  // },
 
   deleteWorkspaceById: async (workspaceId: number, userId: string): Promise<void> => {
     const userRole = await prisma.userRole.findFirst({
@@ -951,15 +1004,15 @@ export const workspaceService = {
       throw new Error('You are not authorized to delete this workspace.');
     }
 
-    await prisma.$transaction([
-      prisma.rolePermission.deleteMany({ where: { workspaceId } }),
-      prisma.category.deleteMany({ where: { workspaceId } }),
-      prisma.invitation.deleteMany({ where: { workspaceId } }),
-      prisma.userRole.deleteMany({ where: { workspaceId } }),
-      prisma.workspace.delete({ where: { id: workspaceId } }),
-    ]);
+    // Soft delete instead of actual delete
+    await prisma.workspace.update({
+      where: { id: workspaceId },
+      data: {
+        isDeleted: true,
+        isActive: false,
+      },
+    });
   },
-
   removeUserFromWorkspace: async (workspaceId: number, email: string, currentUserId: string): Promise<string> => {
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },

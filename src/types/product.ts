@@ -1,15 +1,4 @@
-export interface ProductInput {
-  name: string;
-  description: string;
-  categoryId?: string;
-  // imageUrl?: string;
-  isActive?: boolean;
-  images?: string[];
-  // stockQuantity?: number;
-  variants?: VariantInput[];
-}
-
-export interface VariantInput {
+export interface ProductVariantInput {
   title: string;
   sku: string;
   price: number;
@@ -18,7 +7,17 @@ export interface VariantInput {
   dimensions?: string;
   color?: string;
   size?: string;
-}
+};
+
+export interface ProductInput {
+  name: string;
+  description: string;
+  isActive?: boolean;
+  images?: string[];
+  categoryId?: string;
+  variants?: ProductVariantInput[];
+};
+
 
 export interface ProductStatsRaw {
   total: bigint;

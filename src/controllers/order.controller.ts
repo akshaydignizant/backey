@@ -8,9 +8,97 @@ import { AuthRequest } from '../types/types';
 import httpResponse from '../util/httpResponse';
 import httpError from '../util/httpError';
 import { prisma } from '../app';
+import { stripe } from '../config/stripeService';
+import logger from '../util/logger';
 
 
-export const createOrder = async (req: AuthRequest, res: Response, next: NextFunction) => {
+// export const createOrder = async (req: AuthRequest, res: Response, next: NextFunction) => {
+//   const workspaceId = Number(req.params.workspaceId);
+//   const authUserId = req.user?.userId;
+
+//   const {
+//     shippingAddressId,
+//     billingAddressId,
+//     shippingAddress,
+//     billingAddress,
+//     paymentMethod,
+//     items,
+//     notes,
+//   } = req.body;
+
+//   // Input validation
+//   if (
+//     isNaN(workspaceId) ||
+//     !authUserId ||
+//     !paymentMethod ||
+//     !Array.isArray(items) ||
+//     items.length === 0 ||
+//     (!shippingAddressId && !shippingAddress) ||
+//     (!billingAddressId && !billingAddress)
+//   ) {
+//     return httpResponse(req, res, 400, 'Invalid input data');
+//   }
+
+//   try {
+//     let finalShippingAddressId = shippingAddressId;
+//     let finalBillingAddressId = billingAddressId;
+
+//     // Create shipping address if object provided
+//     if (!finalShippingAddressId && shippingAddress) {
+//       const createdShipping = await prisma.address.create({
+//         data: { ...shippingAddress, userId: authUserId },
+//       });
+//       finalShippingAddressId = createdShipping.id;
+//     }
+
+//     // Create billing address if object provided
+//     if (!finalBillingAddressId && billingAddress) {
+//       const createdBilling = await prisma.address.create({
+//         data: { ...billingAddress, userId: authUserId },
+//       });
+//       finalBillingAddressId = createdBilling.id;
+//     }
+
+//     // Proceed with order creation
+//     const order = await orderService.createOrder(
+//       workspaceId,
+//       {
+//         userId: authUserId,
+//         shippingAddressId: finalShippingAddressId,
+//         billingAddressId: finalBillingAddressId,
+//         paymentMethod,
+//         items,
+//         notes,
+//       },
+//       authUserId
+//     );
+
+//     return httpResponse(req, res, 201, 'Order created successfully', order);
+//   } catch (error) {
+//     return httpError(next, error, req);
+//   }
+// };
+
+export const createOrder = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { paymentMethod } = req.body;
+
+    if (paymentMethod === PaymentMethod.CASH) {
+      // Handle cash payment immediately
+      return handleCashPayment(req, res, next);
+    } else if (paymentMethod === PaymentMethod.STRIPE) {
+      // Initiate Stripe payment flow
+      handleStripePayment(req, res, next);
+      return;
+    } else {
+      return httpResponse(req, res, 400, 'Invalid payment method');
+    }
+  } catch (error) {
+    return httpError(next, error, req);
+  }
+};
+
+const handleCashPayment = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const workspaceId = Number(req.params.workspaceId);
   const authUserId = req.user?.userId;
 
@@ -19,15 +107,14 @@ export const createOrder = async (req: AuthRequest, res: Response, next: NextFun
     billingAddressId,
     shippingAddress,
     billingAddress,
-    paymentMethod,
     items,
     notes,
   } = req.body;
 
+  // Input validation
   if (
     isNaN(workspaceId) ||
     !authUserId ||
-    !paymentMethod ||
     !Array.isArray(items) ||
     items.length === 0 ||
     (!shippingAddressId && !shippingAddress) ||
@@ -37,33 +124,15 @@ export const createOrder = async (req: AuthRequest, res: Response, next: NextFun
   }
 
   try {
-    let finalShippingAddressId = shippingAddressId;
-    let finalBillingAddressId = billingAddressId;
-
-    // Create shipping address if object provided
-    if (!finalShippingAddressId && shippingAddress) {
-      const createdShipping = await prisma.address.create({
-        data: { ...shippingAddress, userId: authUserId },
-      });
-      finalShippingAddressId = createdShipping.id;
-    }
-
-    // Create billing address if object provided
-    if (!finalBillingAddressId && billingAddress) {
-      const createdBilling = await prisma.address.create({
-        data: { ...billingAddress, userId: authUserId },
-      });
-      finalBillingAddressId = createdBilling.id;
-    }
-
-    // Proceed with order creation
     const order = await orderService.createOrder(
       workspaceId,
       {
         userId: authUserId,
-        shippingAddressId: finalShippingAddressId,
-        billingAddressId: finalBillingAddressId,
-        paymentMethod,
+        shippingAddressId,
+        billingAddressId,
+        shippingAddress,
+        billingAddress,
+        paymentMethod: PaymentMethod.CASH,
         items,
         notes,
       },
@@ -76,6 +145,71 @@ export const createOrder = async (req: AuthRequest, res: Response, next: NextFun
   }
 };
 
+const handleStripePayment = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.userId;
+    const workspaceId = Number(req.params.workspaceId);
+    const {
+      items,
+      shippingAddress,
+      billingAddress,
+      shippingAddressId,
+      billingAddressId,
+      notes
+    } = req.body;
+
+    // First create order in "PENDING" status
+    const order = await orderService.createOrder(
+      workspaceId,
+      {
+        userId: userId!,
+        shippingAddressId,
+        billingAddressId,
+        shippingAddress,
+        billingAddress,
+        paymentMethod: PaymentMethod.STRIPE,
+        items,
+        notes,
+        status: OrderStatus.PENDING
+      },
+      userId!
+    );
+
+    // Then create Stripe checkout session
+    const orderPreview = await orderService.getOrderPreview(workspaceId, items, userId!);
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: orderPreview.lineItems,
+      mode: 'payment',
+      metadata: {
+        orderId: order.orderId.toString(),
+        userId: userId || '',
+        workspaceId: workspaceId.toString(),
+        items: JSON.stringify(items || []),
+        shippingAddress: JSON.stringify(shippingAddress || {}),
+        billingAddress: JSON.stringify(billingAddress || {})
+      },
+      shipping_address_collection: { allowed_countries: ['US', 'BR'] },
+      success_url: "http://localhost:3000/api/v1/orders/payment-success?session_id={CHECKOUT_SESSION_ID}",
+      cancel_url: `${process.env.FRONTEND_URL}/checkout?canceled=true`
+    });
+
+    console.log("session", session.id);
+
+    // Update order with Stripe session ID
+    await prisma.order.update({
+      where: { id: order.orderId },
+      data: { stripeSessionId: session.id }
+    });
+
+    return res.status(200).json({ url: session.url, session_id: session.id },
+    );
+  } catch (error) {
+    logger.error("Stripe checkout session error", error);
+    return httpError(next, error, req);
+  }
+};
 
 export const getOrders = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const workspaceId = Number(req.params.workspaceId);
