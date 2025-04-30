@@ -90,7 +90,7 @@ router.get(
 router.get(
   '/admin',
   authMiddleware,
-  roleRestriction([Role.ADMIN, Role.MANAGER]),
+  // roleRestriction([Role.ADMIN, Role.MANAGER]),
   getAdminWorkspaces
 );
 

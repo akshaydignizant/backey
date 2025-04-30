@@ -90,7 +90,7 @@ export const productService = {
       const products = await prisma.product.findMany({
         where: {
           workspaceId,
-          isActive: true, // Only fetch active products
+          isActive: true,
         },
         include: {
           category: {
@@ -99,24 +99,33 @@ export const productService = {
               name: true,
             },
           },
-          // variants: true,
+          variants: true,
+          _count: {
+            select: {
+              variants: true,
+            },
+          },
         },
         skip: (page - 1) * pageSize,
         take: pageSize,
+        orderBy: {
+          createdAt: 'desc',
+        },
       });
 
       if (!products || products.length === 0) {
         logger.warn(`No active products found for workspaceId: ${workspaceId}`);
       }
 
-      return products;
+      return products.map(product => ({
+        ...product,
+        variantCount: product._count.variants,
+      }));
     } catch (error) {
       logger.error(`Error fetching active products for workspaceId: ${workspaceId}. Error: ${error}`);
       throw new Error('Failed to fetch products');
     }
   },
-
-
 
   updateProduct: async (workspaceId: number, productId: string, data: Partial<ProductInput>) => {
     try {
@@ -273,11 +282,11 @@ export const productService = {
       if (!productId) throw new Error('Invalid productId');
 
       return await prisma.product.findUnique({
-        where: { id: productId },
+        where: { id: productId, isActive: true },  // Ensure the product is active
         include: {
           category: {
             select: {
-              id: true,  // Only include id and name in the category
+              id: true,
               name: true,
             },
           },
@@ -525,9 +534,10 @@ export const productService = {
     return created;
   },
 
-  searchProducts: async (workspaceId: number, keyword: string, page: number, limit: number) => {
+  getProducts: async (workspaceId: number, page: number, limit: number) => {
     const skip = (page - 1) * limit;
-    // Check if the workspace exists
+
+    // Confirm workspace exists
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
     });
@@ -535,24 +545,40 @@ export const productService = {
     if (!workspace) {
       throw new Error('Workspace not found');
     }
-    // Use pagination, sanitize the input, and perform case-insensitive search on the name.
-    return await prisma.product.findMany({
-      where: {
-        workspaceId,
-        name: { contains: keyword, mode: 'insensitive' },
-      },
-      include: {
-        variants: true,
-        category: true,
-      },
-      skip,   // Skip products based on page
-      take: limit,  // Limit the number of results
-      orderBy: {
-        name: 'asc',  // You can choose the sort order based on your needs
-      },
-    });
-  },
 
+    // Fetch products with pagination
+    const [products, total] = await Promise.all([
+      prisma.product.findMany({
+        where: {
+          workspaceId,
+          isActive: true,
+        },
+        include: {
+          variants: true,
+          category: true,
+        },
+        skip,
+        take: limit,
+        orderBy: {
+          name: 'asc',
+        },
+      }),
+      prisma.product.count({
+        where: {
+          workspaceId,
+          isActive: true,
+        },
+      }),
+    ]);
+
+    return {
+      products,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  },
   checkSlugAvailability: async (slug: string, workspaceId: number) => {
     const product = await prisma.product.findFirst({ where: { slug, workspaceId } });
     return !product;

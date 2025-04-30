@@ -24,6 +24,7 @@ import {
   exportOrders,
   getOrdersByDateRangeController,
   getAllOrderItems,
+  getOrdersAddress,
 } from '../controllers/order.controller';
 import { createCheckoutSession, orderConfirmation, paymentCancelled, paymentSuccess } from '../controllers/payment.controller';
 import { handleStripeWebhook } from '../controllers/webhookController';
@@ -36,7 +37,7 @@ const router = Router();
  */
 router.post('/workspaces/:workspaceId/orders', authMiddleware, createOrder);
 
-
+router.get('/ordersAddress', authMiddleware, getOrdersAddress); // Get all orders for a workspace
 
 router.post('/checkout', createCheckoutSession); // Initiates Stripe Checkout
 router.get('/payment-success', paymentSuccess);

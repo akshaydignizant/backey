@@ -16,9 +16,9 @@ import {
   updateVariants,
   bulkUploadProducts,
   bulkDeleteProducts,
-  searchProducts,
   checkSlugAvailability,
-  getProductVariants
+  getProductVariants,
+  getProducts
 } from '../controllers/product.controller';
 
 import variantController from '../controllers/variant.controller';
@@ -38,8 +38,8 @@ router.delete('/products/:workspaceId', authMiddleware, roleRestriction([Role.AD
 /**
  * Product Status & Variants
  */
-router.patch('/:workspaceId/:productId/status', authMiddleware, roleRestriction([Role.ADMIN]), toggleProductStatus);
-router.patch('/:workspaceId/:productId/variants', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), updateVariants);
+router.patch('/:productId/status', authMiddleware, roleRestriction([Role.ADMIN]), toggleProductStatus);
+router.patch('/:productId/variants', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), updateVariants);
 
 /**
  * Product Details
@@ -57,7 +57,7 @@ router.get('/:workspaceId/stats', authMiddleware, roleRestriction([Role.ADMIN, R
 /**
  * Search & Slug Check
  */
-router.get('/:workspaceId/search', authMiddleware, searchProducts);
+router.get('/:workspaceId/search', authMiddleware, getProducts);
 router.get('/:workspaceId/check-slug/:slug', authMiddleware, checkSlugAvailability);
 
 /**

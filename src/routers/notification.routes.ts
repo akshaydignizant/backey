@@ -17,7 +17,7 @@ import {
 
 const router = Router();
 
-router.get('/:workspaceId', authMiddleware, getNotifications);
+router.get('/', authMiddleware, getNotifications);
 router.post('/:workspaceId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), createNotification);
 router.put('/:workspaceId/:notificationId/read', authMiddleware, markNotificationAsRead);
 router.put('/:workspaceId/mark-all-read', authMiddleware, markAllNotificationsAsRead);

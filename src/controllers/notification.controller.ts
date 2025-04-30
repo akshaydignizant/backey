@@ -28,9 +28,8 @@ const bulkDeleteSchema = z.object({
 
 export const getNotifications = async (req: Request, res: Response) => {
     try {
-        // const { workspaceId } = req.params;
         const { limit, offset, type, isRead } = querySchema.parse(req.query);
-        const userId = req.user?.userId; // Assuming authMiddleware adds user to req
+        const userId = req.user?.userId;
         const notifications = await notificationService.getNotifications(userId as string, {
             limit,
             offset,

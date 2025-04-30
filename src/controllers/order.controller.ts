@@ -98,6 +98,27 @@ export const createOrder = async (req: AuthRequest, res: Response, next: NextFun
   }
 };
 
+export const getOrdersAddress = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const authUserId = req.user?.userId;
+    const status = req.query.status as OrderStatus || 'PENDING';
+
+    if (!authUserId) {
+      return httpResponse(req, res, 400, 'Invalid workspace ID or user ID');
+    }
+
+    const validStatuses = ['PENDING', 'PROCESSING', 'DELIVERED', 'CANCELLED'];
+    if (!validStatuses.includes(status)) {
+      return httpResponse(req, res, 400, 'Invalid order status');
+    }
+
+    const addresses = await orderService.getOrdersAddress(status as OrderStatus, authUserId);
+    return httpResponse(req, res, 200, 'Addresses retrieved successfully', addresses);
+  } catch (error) {
+    return httpError(next, error, req);
+  }
+};
+
 const handleCashPayment = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const workspaceId = Number(req.params.workspaceId);
   const authUserId = req.user?.userId;

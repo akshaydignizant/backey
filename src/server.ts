@@ -100,7 +100,7 @@ const httpServer = http.createServer(app)
 // // Set up Socket.IO
 export const io = new SocketIOServer(httpServer, {
   cors: {
-    origin: ['http://localhost:3001', 'https://your-ngrok-url.ngrok-free.app'],
+    origin: ['http://localhost:3000', 'https://d9fd-2402-a00-162-ea17-8dea-c99e-ed74-4511.ngrok-free.app'],
     credentials: true,
   },
 })
@@ -116,12 +116,12 @@ io.on('connection', (socket) => {
 
   if (userId) {
     socket.join(userId);
-    console.log(`👤 User ${userId} joined their room`);
+    console.log(`User ${userId} joined their room`);
     logger.info('SOCKET_JOINED_USER_ROOM', { socketId: socket.id, userId });
   }
 
   socket.on('disconnect', () => {
-    console.log(`🔌 Socket disconnected: ${socket.id}`);
+    console.log(`Socket disconnected: ${socket.id}`);
     logger.info('SOCKET_DISCONNECTED', { socketId: socket.id });
   });
 });
@@ -154,5 +154,21 @@ const server = httpServer.listen(config.PORT)
       )
     }
   })()
+
+process.on('SIGINT', () => {
+  // console.log('SIGINT received. Closing server...');
+  server.close(() => {
+    console.log('Server closed.');
+    process.exit(0);
+  });
+});
+
+process.on('SIGTERM', () => {
+  // console.log('SIGTERM received. Closing server...');
+  server.close(() => {
+    console.log('Server closed.');
+    process.exit(0);
+  });
+});
 
 export { app, server }

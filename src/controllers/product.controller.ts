@@ -3,13 +3,25 @@ import { NextFunction, Request, Response } from 'express';
 import { productService } from '../services/product.service';
 import httpError from '../util/httpError';
 import httpResponse from '../util/httpResponse';
-import { ProductInput } from '../types/product';
+import { ProductInput, ProductVariantInput } from '../types/product';
+import prisma from '../util/prisma';
+import { findProductById } from '../services/entityService';
 
 export const createProduct = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { categoryId } = req.params;
   const workspaceId = parseInt(req.params.workspaceId);
-  const { name, description, variants } = req.body;
+  const { name, description } = req.body;
   const images = req.files ? (req.files as Express.Multer.File[]).map((file) => file.path) : [];
+  let parsedVariants: ProductVariantInput[] = [];
+  try {
+    parsedVariants = typeof req.body.variants === 'string'
+      ? JSON.parse(req.body.variants)
+      : Array.isArray(req.body.variants)
+        ? req.body.variants
+        : [];
+  } catch (e) {
+    return httpResponse(req, res, 400, 'Invalid variants JSON format');
+  }
 
   if (isNaN(workspaceId)) {
     return httpResponse(req, res, 400, 'Invalid workspaceId');
@@ -28,7 +40,7 @@ export const createProduct = async (req: Request, res: Response, next: NextFunct
       description,
       isActive: true,
       images,
-      variants: Array.isArray(variants) ? variants : [], // safely cast
+      variants: parsedVariants
     };
 
     const product = await productService.createProduct(workspaceId, categoryId, productInput);
@@ -112,10 +124,16 @@ export const getProductBySlug = async (req: Request, res: Response, next: NextFu
 export const toggleProductStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { productId } = req.params;
-    const product = await productService.toggleProductStatus(productId);
-    return httpResponse(req, res, 200, 'Product status toggled', product);
+    // const product = await findProductById(productId);
+
+    // if (!product) {
+    //   return httpError(next, 'Product not found', req, 404);
+    // }
+
+    const updatedProduct = await productService.toggleProductStatus(productId);
+    return httpResponse(req, res, 200, 'Product status toggled', updatedProduct);
   } catch (err) {
-    return httpError(next, err, req, 400);
+    return httpError(next, err, req);
   }
 };
 
@@ -132,6 +150,13 @@ export const getProductStats = async (req: Request, res: Response, next: NextFun
 export const updateVariants = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { productId } = req.params;
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+    });
+
+    if (!product) {
+      throw new Error(`Product with ID ${productId} not found`);
+    }
     const updated = await productService.updateVariants(productId, req.body.variants);
     return httpResponse(req, res, 200, 'Variants updated', updated);
   } catch (err) {
@@ -171,43 +196,40 @@ export const bulkUploadProducts = async (
 };
 
 
-export const searchProducts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const getProducts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { workspaceId } = req.params;
-    const { q, page = 1, limit = 10 } = req.query;  // Default pagination: page 1, limit 10
+    const { page = '1', limit = '10' } = req.query;
 
-    // Validate workspaceId (must be a valid number)
-    const parsedWorkspaceId = Number(workspaceId);
-    if (isNaN(parsedWorkspaceId) || parsedWorkspaceId <= 0) {
-      return httpResponse(req, res, 400, 'Invalid workspaceId');
+    const parsedWorkspaceId = parseInt(workspaceId, 10);
+    const parsedPage = parseInt(page as string, 10);
+    const parsedLimit = parseInt(limit as string, 10);
+
+    console.log({ parsedWorkspaceId, parsedPage, parsedLimit });
+
+    if (!parsedWorkspaceId || !parsedPage || !parsedLimit) {
+      return httpError(next, new Error('Invalid input'), req, 400);
     }
 
-    // Sanitize and validate search keyword
-    const keyword = String(q || '').trim();
-    if (keyword.length < 3) {
-      return httpResponse(req, res, 400, 'Search query must be at least 3 characters');
-    }
+    const skip = (parsedPage - 1) * parsedLimit;
 
-    // Parse page and limit to integers and handle invalid values
-    const parsedPage = Number(page);
-    const parsedLimit = Number(limit);
+    const products = await prisma.product.findMany({
+      where: { workspaceId: parsedWorkspaceId },
+      skip,
+      take: parsedLimit,
+    });
 
-    if (isNaN(parsedPage) || parsedPage <= 0) {
-      return httpResponse(req, res, 400, 'Invalid page number');
-    }
-    if (isNaN(parsedLimit) || parsedLimit <= 0 || parsedLimit > 50) {
-      return httpResponse(req, res, 400, 'Invalid limit, should be between 1 and 50');
-    }
+    const total = await prisma.product.count({
+      where: { workspaceId: parsedWorkspaceId },
+    });
 
-    // Perform search with pagination
-    const products = await productService.searchProducts(parsedWorkspaceId, keyword, parsedPage, parsedLimit);
-
-    return httpResponse(req, res, 200, 'Products search results', products);
+    return httpResponse(req, res, 200, 'Products fetched', products);
   } catch (err) {
-    console.error('❌ Error searching products:', err);
-    return httpError(next, err, req, 500);
+    console.error(err);
+    res.status(500).json({ error: "Something went wrong" });
   }
 };
+
 
 export const checkSlugAvailability = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {

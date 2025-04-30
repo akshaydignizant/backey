@@ -39,6 +39,7 @@ model User {
   OrderStatusHistory  OrderStatusHistory[]
   UserRole            UserRole[]
   UserDevice          UserDevice[]
+  isDeleted           Boolean              @default(false)
 
   // Index on email and phone for fast lookup
   @@index([email])

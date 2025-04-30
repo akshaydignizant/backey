@@ -91,17 +91,14 @@ export const prisma = new PrismaClient()
 
 // Middleware
 app.use(helmet())
-// app.use(
-//   cors({
-//     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD'],
-//     origin: ['http://localhost:3000', "https://0bc94a167d659b.lhr.life"], // adjust this for dev as needed
-//     credentials: true,
-//   })
-// )
-app.use(cors({
-  origin: ['http://localhost:3000', '*', 'https://0bc94a167d659b.lhr.life'],
-  credentials: true, // if you're using cookies or auth headers
-}));
+app.use(
+  cors({
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD'],
+    origin: ['http://localhost:3000', "https://d9fd-2402-a00-162-ea17-8dea-c99e-ed74-4511.ngrok-free.app"], // adjust this for dev as needed
+    credentials: true,
+  })
+)
+
 // app.use(cors());
 
 app.use(express.json())

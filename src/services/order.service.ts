@@ -549,6 +549,55 @@ export const getOrder = async (workspaceId: number, orderId: string, authUserId:
   return order;
 };
 
+export const getOrdersAddress = async (
+  status: OrderStatus,
+  authUserId: string
+) => {
+  const orders = await prisma.order.findMany({
+    where: {
+      status,
+      userId: authUserId,
+    },
+    select: {
+      shippingAddress: {
+        select: {
+          id: true,
+          address: true,
+          street: true,
+          city: true,
+          region: true,
+          postalCode: true,
+          country: true,
+        },
+      },
+      billingAddress: {
+        select: {
+          id: true,
+          address: true,
+          street: true,
+          city: true,
+          region: true,
+          postalCode: true,
+          country: true,
+        },
+      },
+    },
+  });
+
+  const uniqueAddresses = new Map<string, any>();
+
+  for (const { shippingAddress, billingAddress } of orders) {
+    if (shippingAddress && !uniqueAddresses.has(shippingAddress.id)) {
+      uniqueAddresses.set(shippingAddress.id, shippingAddress);
+    }
+    if (billingAddress && !uniqueAddresses.has(billingAddress.id)) {
+      uniqueAddresses.set(billingAddress.id, billingAddress);
+    }
+  }
+
+  return Array.from(uniqueAddresses.values());
+};
+
 export const getOrderPreview = async (workspaceId: number, items: any[], userId: string) => {
   const variants = await prisma.productVariant.findMany({
     where: {

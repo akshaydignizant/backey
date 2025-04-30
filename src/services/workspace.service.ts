@@ -794,6 +794,7 @@ export const workspaceService = {
     try {
       return await prisma.workspace.findMany({
         where: {
+          isDeleted: false, // Exclude soft-deleted workspaces
           UserRole: {
             some: {
               userId,
@@ -830,10 +831,11 @@ export const workspaceService = {
     const cached = await redisClient.get(cacheKey);
     if (cached) return JSON.parse(cached);
 
-    // Define search filter
-    const where: Prisma.WorkspaceWhereInput = search
-      ? { slug: { contains: search, mode: 'insensitive' } }
-      : {};
+    // Define search filter with isDeleted check
+    const where: Prisma.WorkspaceWhereInput = {
+      isDeleted: false,  // Exclude soft deleted workspaces
+      ...(search && { slug: { contains: search, mode: 'insensitive' } }),
+    };
 
     // Fetch data with pagination
     const results = await prisma.workspace.findMany({
@@ -878,7 +880,6 @@ export const workspaceService = {
     if (!userRole) {
       throw new Error('Unauthorized: Only admins can update this workspace');
     }
-    console.log("dfgdG", data.closingTime);
 
     const workspace = await prisma.workspace.update({
       where: { id: workspaceId },
