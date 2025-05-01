@@ -12,44 +12,6 @@ const querySchema = z.object({
     }),
 });
 
-// const addItemSchema = z.object({
-//     productId: z.string().uuid('Invalid product ID'),
-//     title: z.string().min(1, 'Title is required').max(100),
-//     sku: z.string().min(1, 'SKU is required').max(50),
-//     price: z.number().positive('Price must be positive'),
-//     stock: z.number().int().nonnegative('Stock must be non-negative'),
-//     size: z.string().optional(),
-//     isAvailable: z.boolean().default(true),
-// });
-
-// const updateItemSchema = z.object({
-//     title: z.string().min(1).max(100).optional(),
-//     sku: z.string().min(1).max(50).optional(),
-//     price: z.number().positive().optional(),
-//     stock: z.number().int().nonnegative().optional(),
-//     size: z.string().optional(),
-//     isAvailable: z.boolean().optional(),
-// });
-
-// const transferSchema = z.object({
-//     sourceWorkspaceId: z.number().int().positive('Invalid source workspace ID'),
-//     destinationWorkspaceId: z.number().int().positive('Invalid destination workspace ID'),
-//     variantId: z.string().uuid('Invalid variant ID'),
-//     quantity: z.number().int().positive('Quantity must be positive'),
-// });
-
-// const updateStockSchema = z.object({
-//     action: z.enum(['increment', 'decrement', 'set'], { message: 'Invalid action' }),
-//     quantity: z.number().nonnegative('Quantity must be non-negative'),
-// });
-
-// const stockFilterSchema = z.object({
-//     productId: z.string().uuid('Invalid product ID').optional(),
-//     minStock: z.number().int().nonnegative('Min stock must be non-negative').optional(),
-//     maxStock: z.number().int().nonnegative('Max stock must be non-negative').optional(),
-//     isAvailable: z.boolean().optional(),
-// }).strict();
-
 const lowStockSchema = z.object({
     threshold: z.string().optional().default('5').transform(Number).refine((val) => val >= 0, {
         message: 'Threshold must be non-negative',

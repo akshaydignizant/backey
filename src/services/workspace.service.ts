@@ -825,12 +825,6 @@ export const workspaceService = {
   },
 
   getWorkspace: async ({ search, page, limit }: SearchParams) => {
-    const cacheKey = `workspaces:search=${search || 'all'}:page=${page}:limit=${limit}`;
-
-    // Check cache
-    const cached = await redisClient.get(cacheKey);
-    if (cached) return JSON.parse(cached);
-
     // Define search filter with isDeleted check
     const where: Prisma.WorkspaceWhereInput = {
       isDeleted: false,  // Exclude soft deleted workspaces
@@ -860,10 +854,6 @@ export const workspaceService = {
     const hasNextPage = results.length > limit;
     const data = hasNextPage ? results.slice(0, limit) : results;
     const response = { data, meta: { page, limit, hasNextPage } };
-
-    // Cache result
-    await redisClient.setEx(cacheKey, 60, JSON.stringify(response));
-
     return response;
   },
 

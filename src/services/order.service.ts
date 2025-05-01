@@ -8,6 +8,7 @@ import logger from '../util/logger';
 import { buildOrderNotificationEmail } from '../util/notifyAdminsAndManagers';
 import { log } from 'console';
 import Stripe from 'stripe';
+import { revertStock } from '../helper/revertStock';
 
 const prisma = new PrismaClient();
 // export const createOrder = async (
@@ -238,7 +239,6 @@ const prisma = new PrismaClient();
 // };
 
 export const createOrder = async (
-  workspaceId: number,
   data: {
     userId: string;
     shippingAddressId?: string;
@@ -253,19 +253,40 @@ export const createOrder = async (
   authUserId: string
 ) => {
   try {
-    // Batch validate workspace and user
-    const [workspace, user] = await Promise.all([
-      prisma.workspace.findUniqueOrThrow({
-        where: { id: workspaceId },
-        select: { id: true, name: true },
-      }),
+    const [user, variants] = await Promise.all([
       prisma.user.findUniqueOrThrow({
         where: { id: data.userId },
         select: { id: true, email: true, firstName: true, lastName: true },
       }),
+      prisma.productVariant.findMany({
+        where: { id: { in: data.items.map(i => i.variantId) } },
+        select: {
+          id: true,
+          stock: true,
+          price: true,
+          title: true,
+          product: { select: { id: true, name: true, workspaceId: true } },
+        },
+      }),
     ]);
 
-    // Parallelize address creation/validation
+    // Ensure all variants exist and belong to the same workspace
+    if (variants.length !== data.items.length) {
+      throw new Error("Some product variants were not found.");
+    }
+
+    const workspaceIds = new Set(variants.map(v => v.product.workspaceId));
+    if (workspaceIds.size > 1) {
+      throw new Error("All items must be from the same workspace.");
+    }
+
+    const workspaceId = Array.from(workspaceIds)[0];
+    const workspace = await prisma.workspace.findUniqueOrThrow({
+      where: { id: workspaceId },
+      select: { id: true, name: true },
+    });
+
+    // Address handling
     let finalShippingAddressId = data.shippingAddressId;
     let finalBillingAddressId = data.billingAddressId;
 
@@ -274,108 +295,100 @@ export const createOrder = async (
       addressPromises.push(
         prisma.address.create({
           data: { ...data.shippingAddress, userId: data.userId },
-        }).then(created => (finalShippingAddressId = created.id))
+        }).then(created => finalShippingAddressId = created.id)
       );
     }
     if (!finalBillingAddressId && data.billingAddress) {
       addressPromises.push(
         prisma.address.create({
           data: { ...data.billingAddress, userId: data.userId },
-        }).then(created => (finalBillingAddressId = created.id))
+        }).then(created => finalBillingAddressId = created.id)
       );
     }
     await Promise.all(addressPromises);
 
-    // Validate addresses if IDs provided
+    // Address validation
     if (finalShippingAddressId || finalBillingAddressId) {
-      const addressIds = [finalShippingAddressId, finalBillingAddressId].filter(Boolean) as string[];
-      const addresses = await prisma.address.findMany({
-        where: { id: { in: addressIds } },
-      });
-      if (addresses.length !== addressIds.length) {
-        throw new Error('Invalid shipping or billing address');
+      const idsToCheck = [finalShippingAddressId, finalBillingAddressId].filter(Boolean) as string[];
+      const found = await prisma.address.findMany({ where: { id: { in: idsToCheck } } });
+      if (found.length !== idsToCheck.length) {
+        throw new Error("Invalid shipping or billing address.");
       }
     }
 
-    // Validate product variants and stock
-    const variantIds = data.items.map(i => i.variantId);
-    const variants = await prisma.productVariant.findMany({
-      where: { id: { in: variantIds } },
-      select: { id: true, stock: true, price: true, title: true, product: { select: { name: true } } },
-    });
-
+    // Stock checks
     const variantMap = new Map(variants.map(v => [v.id, v]));
     const stockErrors: string[] = [];
+
     for (const item of data.items) {
       const variant = variantMap.get(item.variantId);
-      if (!variant) throw new Error(`Variant ${item.variantId} not found`);
-      if (item.quantity > variant.stock) {
-        stockErrors.push(`Insufficient stock for ${variant.product.name} (${variant.title})`);
+      if (item.quantity > variant!.stock) {
+        stockErrors.push(`Insufficient stock for ${variant!.product.name} (${variant!.title})`);
       }
     }
-    if (stockErrors.length) throw new Error(stockErrors.join(', '));
+    if (stockErrors.length) throw new Error(stockErrors.join(", "));
 
-    // Calculate totalAmount
     const totalAmount = data.items.reduce((sum, item) => {
       const variant = variantMap.get(item.variantId)!;
       return sum + item.quantity * variant.price;
     }, 0);
 
-    // Execute transaction
-    const order = await prisma.$transaction(
-      async (tx) => {
-        const newOrder = await tx.order.create({
-          data: {
-            userId: data.userId,
-            workspaceId,
-            shippingAddressId: finalShippingAddressId!,
-            billingAddressId: finalBillingAddressId!,
-            paymentMethod: data.paymentMethod,
-            status: data.status || 'PENDING',
-            totalAmount,
-            notes: data.notes,
-            items: {
-              createMany: {
-                data: data.items.map(item => ({
-                  variantId: item.variantId,
-                  quantity: item.quantity,
-                  price: variantMap.get(item.variantId)!.price,
-                })),
-              },
+    const order = await prisma.$transaction(async (tx) => {
+      const newOrder = await tx.order.create({
+        data: {
+          userId: data.userId,
+          workspaceId,
+          shippingAddressId: finalShippingAddressId!,
+          billingAddressId: finalBillingAddressId!,
+          paymentMethod: data.paymentMethod,
+          status: data.status || 'PENDING',
+          totalAmount,
+          notes: data.notes,
+          items: {
+            createMany: {
+              data: data.items.map(item => ({
+                variantId: item.variantId,
+                quantity: item.quantity,
+                price: variantMap.get(item.variantId)!.price,
+              })),
             },
           },
-          include: {
-            items: {
-              include: {
-                variant: { include: { product: { select: { name: true } } } },
-              },
+        },
+        include: {
+          items: {
+            include: {
+              variant: { include: { product: { select: { name: true } } } },
             },
-            shippingAddress: true,
-            billingAddress: true,
           },
-        });
+          shippingAddress: true,
+          billingAddress: true,
+        },
+      });
 
-        // Update stock if necessary
-        if (data.paymentMethod === 'CASH' || data.status === 'PROCESSING') {
-          await Promise.all(
-            data.items.map(item =>
-              tx.productVariant.update({
-                where: { id: item.variantId },
-                data: {
-                  stock: {
-                    decrement: item.quantity
-                  }
-                }
-              })
-            )
-          );
-        }
-        return newOrder;
-      },
-      { maxWait: 5000, timeout: 10000 }
-    );
+      if (data.paymentMethod === 'CASH' || data.status === 'PROCESSING') {
+        await Promise.all(
+          data.items.map(item =>
+            tx.productVariant.update({
+              where: { id: item.variantId },
+              data: { stock: { decrement: item.quantity } },
+            })
+          )
+        );
+      }
 
-    // Create notification
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId: newOrder.id,
+          status: OrderStatus.PROCESSING,
+          note: 'Order placed by user',
+          changedBy: authUserId,
+          createdAt: new Date(),
+        },
+      });
+
+      return newOrder;
+    });
+
     await prisma.notification.create({
       data: {
         userId: authUserId,
@@ -527,8 +540,6 @@ export const createOrder = async (
   } catch (error: any) {
     console.error('CreateOrder Error:', error);
     throw new Error(`Failed to create order: ${error.message}`);
-  } finally {
-    await prisma.$disconnect();
   }
 };
 export const getOrders = async (workspaceId: number, authUserId: string) => {
@@ -537,6 +548,79 @@ export const getOrders = async (workspaceId: number, authUserId: string) => {
     where: { workspaceId },
     include: { items: { include: { variant: true } }, user: true, shippingAddress: true, billingAddress: true },
   });
+};
+
+
+export const cancelOrder = async (
+  orderId: string,
+  authUserId: string
+) => {
+  // Start a transaction
+  const result = await prisma.$transaction(async (tx) => {
+    // Find the order to cancel
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+      include: {
+        items: true,
+        user: true,  // Include the user for email notification
+      },
+    });
+
+    if (!order) {
+      throw new Error('Order not found');
+    }
+
+    if (order.status === 'CANCELLED') {
+      throw new Error('Order has already been cancelled');
+    }
+
+    // Update the order status to "CANCELLED"
+    const updatedOrder = await tx.order.update({
+      where: { id: orderId },
+      data: { status: 'CANCELLED' },
+    });
+
+    // Create a cancellation status history entry
+    await tx.orderStatusHistory.create({
+      data: {
+        orderId: updatedOrder.id,
+        status: 'CANCELLED',
+        note: 'Order CANCELLED',
+        changedBy: authUserId,
+        createdAt: new Date(),
+      },
+    });
+
+    // Revert the stock changes if the order was previously processed or payment was made
+    if (order.status !== 'PENDING' && order.paymentMethod !== 'CASH') {
+      await revertStock(order.items, tx);  // Pass the transaction to ensure atomicity
+    }
+
+    // Create a cancellation notification (no workspace anymore)
+    await tx.notification.create({
+      data: {
+        userId: authUserId,
+        title: 'Order Cancelled',
+        workspaceId: order.workspaceId,
+        type: NotificationType.ORDER_UPDATE,
+        message: `Order #${orderId} has been cancelled`,
+      },
+    });
+
+    // Send cancellation email
+    const emailTemplate = `
+      <p>Your order #${orderId} has been cancelled.</p>
+      <p>For any queries, please contact support.</p>
+    `;
+    await sendEmail(order.user.email, 'Order Cancelled', emailTemplate);
+
+    return {
+      message: `Order #${orderId} has been successfully cancelled.`,
+      status: updatedOrder.status,
+    };
+  });
+
+  return result;
 };
 
 export const getOrder = async (workspaceId: number, orderId: string, authUserId: string) => {
@@ -632,7 +716,6 @@ export const createFinalOrderFromSession = async (session: Stripe.Checkout.Sessi
     throw new Error("Session metadata is missing");
   }
   const userId = session.metadata.userId;
-  const workspaceId = Number(session.metadata.workspaceId);
   const items = JSON.parse(session.metadata.items);
   const shippingAddress = JSON.parse(session.metadata.shippingAddress);
   const billingAddress = JSON.parse(session.metadata.billingAddress);
@@ -644,7 +727,7 @@ export const createFinalOrderFromSession = async (session: Stripe.Checkout.Sessi
   ]);
 
   // Reuse your existing order creation logic
-  return createOrder(workspaceId, {
+  return createOrder({
     userId,
     shippingAddressId: shipping.id,
     billingAddressId: billing.id,

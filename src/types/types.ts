@@ -10,7 +10,8 @@ export type THttpResponse = {
         url: string
     }
     message: string
-    data: unknown
+    data?: unknown  // Make data optional
+    meta?: unknown | null
 }
 
 export type THttpError = {

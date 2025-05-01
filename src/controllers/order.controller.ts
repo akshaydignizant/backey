@@ -98,29 +98,8 @@ export const createOrder = async (req: AuthRequest, res: Response, next: NextFun
   }
 };
 
-export const getOrdersAddress = async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    const authUserId = req.user?.userId;
-    const status = req.query.status as OrderStatus || 'PENDING';
-
-    if (!authUserId) {
-      return httpResponse(req, res, 400, 'Invalid workspace ID or user ID');
-    }
-
-    const validStatuses = ['PENDING', 'PROCESSING', 'DELIVERED', 'CANCELLED'];
-    if (!validStatuses.includes(status)) {
-      return httpResponse(req, res, 400, 'Invalid order status');
-    }
-
-    const addresses = await orderService.getOrdersAddress(status as OrderStatus, authUserId);
-    return httpResponse(req, res, 200, 'Addresses retrieved successfully', addresses);
-  } catch (error) {
-    return httpError(next, error, req);
-  }
-};
 
 const handleCashPayment = async (req: AuthRequest, res: Response, next: NextFunction) => {
-  const workspaceId = Number(req.params.workspaceId);
   const authUserId = req.user?.userId;
 
   const {
@@ -134,7 +113,6 @@ const handleCashPayment = async (req: AuthRequest, res: Response, next: NextFunc
 
   // Input validation
   if (
-    isNaN(workspaceId) ||
     !authUserId ||
     !Array.isArray(items) ||
     items.length === 0 ||
@@ -146,7 +124,6 @@ const handleCashPayment = async (req: AuthRequest, res: Response, next: NextFunc
 
   try {
     const order = await orderService.createOrder(
-      workspaceId,
       {
         userId: authUserId,
         shippingAddressId,
@@ -170,64 +147,87 @@ const handleStripePayment = async (req: AuthRequest, res: Response, next: NextFu
   try {
     const userId = req.user?.userId;
     const workspaceId = Number(req.params.workspaceId);
-    const {
-      items,
-      shippingAddress,
-      billingAddress,
-      shippingAddressId,
-      billingAddressId,
-      notes
-    } = req.body;
+    const { items, notes } = req.body;
 
-    // First create order in "PENDING" status
-    const order = await orderService.createOrder(
-      workspaceId,
-      {
-        userId: userId!,
-        shippingAddressId,
-        billingAddressId,
-        shippingAddress,
-        billingAddress,
-        paymentMethod: PaymentMethod.STRIPE,
-        items,
-        notes,
-        status: OrderStatus.PENDING
-      },
-      userId!
-    );
+    if (!userId) {
+      return httpResponse(req, res, 400, 'User ID is required');
+    }
 
-    // Then create Stripe checkout session
-    const orderPreview = await orderService.getOrderPreview(workspaceId, items, userId!);
+    if (!workspaceId || isNaN(workspaceId)) {
+      return httpResponse(req, res, 400, 'Invalid workspace ID');
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return httpResponse(req, res, 400, 'Items are required');
+    }
+
+    const orderPreview = await orderService.getOrderPreview(workspaceId, items, userId);
+
+    if (!orderPreview || !orderPreview.lineItems || orderPreview.lineItems.length === 0) {
+      return httpResponse(req, res, 400, 'Invalid order preview');
+    }
+
+    if (!process.env.FRONTEND_URL) {
+      return httpResponse(req, res, 500, 'Frontend URL is not configured');
+    }
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: orderPreview.lineItems,
       mode: 'payment',
       metadata: {
-        orderId: order.orderId.toString(),
-        userId: userId || '',
-        workspaceId: workspaceId.toString(),
-        items: JSON.stringify(items || []),
-        shippingAddress: JSON.stringify(shippingAddress || {}),
-        billingAddress: JSON.stringify(billingAddress || {})
+        userId,
+        workspaceId,
+        notes: notes || '',
+        items: JSON.stringify(items),
       },
-      shipping_address_collection: { allowed_countries: ['US', 'BR'] },
-      success_url: "http://localhost:3000/api/v1/orders/payment-success?session_id={CHECKOUT_SESSION_ID}",
+      success_url: `${process.env.FRONTEND_URL}/checkout-success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.FRONTEND_URL}/checkout?canceled=true`
     });
 
-    console.log("session", session.id);
+    return res.status(200).json({ url: session.url, session_id: session.id });
 
-    // Update order with Stripe session ID
-    await prisma.order.update({
-      where: { id: order.orderId },
-      data: { stripeSessionId: session.id }
-    });
-
-    return res.status(200).json({ url: session.url, session_id: session.id },
-    );
   } catch (error) {
-    logger.error("Stripe checkout session error", error);
+    logger.error("Stripe session error", error); // Log the error message for more context
+    return httpError(next, error, req);
+  }
+};
+
+export const cancelOrderController = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const { orderId } = req.params;
+  const authUserId = req.user?.userId; // Order ID and Authenticated user ID
+
+  if (!orderId || !authUserId) {
+    return httpResponse(req, res, 400, 'Invalid order ID or user ID');
+  }
+  try {
+    // Call cancel order service
+    const result = await orderService.cancelOrder(orderId, authUserId as string);
+
+    // Respond with the result
+    return httpResponse(req, res, 200, 'Order cancelled successfully', result);
+  } catch (error) {
+    console.error('Error cancelling order:', error);
+    return httpError(next, error, req);
+  }
+};
+export const getOrdersAddress = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const authUserId = req.user?.userId;
+    const status = req.query.status as OrderStatus || 'PENDING';
+
+    if (!authUserId) {
+      return httpResponse(req, res, 400, 'Invalid workspace ID or user ID');
+    }
+
+    const validStatuses = ['PENDING', 'PROCESSING', 'DELIVERED', 'CANCELLED'];
+    if (!validStatuses.includes(status)) {
+      return httpResponse(req, res, 400, 'Invalid order status');
+    }
+
+    const addresses = await orderService.getOrdersAddress(status as OrderStatus, authUserId);
+    return httpResponse(req, res, 200, 'Addresses retrieved successfully', addresses);
+  } catch (error) {
     return httpError(next, error, req);
   }
 };

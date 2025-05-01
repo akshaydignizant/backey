@@ -2,6 +2,7 @@ import { PrismaClient, ProductVariant } from '@prisma/client';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 import { IProductVariant, IStockFilter, IStockUpdate } from '../types/products/stock.interface';
+import sendEmail from '../util/sendEmail';
 
 // Initialize Prisma Client
 const prisma = new PrismaClient({ log: ['error'] });
@@ -180,7 +181,7 @@ export const inventoryService = {
 
     // Get Low-Stock Items: List variants with stock below threshold
     async getLowStockItems(workspaceId: number, options: { limit: number; offset: number }) {
-        const { limit, offset } = optionsSchema.parse(options);
+        const { limit, offset } = options; // Assuming optionsSchema.parse(options) is handled earlier
         const lowStockThreshold = 10;
 
         const workspace = await prisma.workspace.findUnique({
@@ -219,6 +220,62 @@ export const inventoryService = {
                 },
             }),
         ]);
+
+        // Prepare the email body
+        const itemsList = variants.map(item => {
+            return `
+            <tr>
+                <td>${item.product.name}</td>
+                <td>${item.title}</td>
+                <td>${item.sku}</td>
+                <td>${item.stock}</td>
+                <td>${item.price}</td>
+                <td>${item.size || "N/A"}</td>
+            </tr>
+        `;
+        }).join('');
+
+        const emailHtml = `
+        <html>
+        <body>
+            <h2>Low Stock Alert</h2>
+            <p><strong>Workspace:</strong> ${workspaceId}</p>
+            <p><strong>Total Items with Low Stock:</strong> ${totalLowStock}</p>
+            <table border="1">
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Variant</th>
+                        <th>SKU</th>
+                        <th>Stock</th>
+                        <th>Price</th>
+                        <th>Size</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${itemsList}
+                </tbody>
+            </table>
+        </body>
+        </html>
+    `;
+
+        // Fetch recipients (you could customize this to notify specific people, like admins or managers)
+        const recipients = await prisma.user.findMany({
+            where: {
+                UserRole: { some: { workspaceId, role: { in: ['ADMIN', 'MANAGER'] } } },
+            },
+            select: { email: true },
+        });
+
+        // Send email to each recipient
+        const emailPromises = recipients.map(r =>
+            sendEmail(r.email, `⚠️ Low Stock Alert for Workspace ${workspaceId}`, emailHtml)
+                .catch(err => console.error(`Failed to send email to ${r.email}:`, err))
+        );
+
+        // Wait for all emails to be sent
+        await Promise.all(emailPromises);
 
         return {
             workspaceId,
@@ -472,6 +529,25 @@ export const inventoryService = {
             },
             orderBy: { stock: 'asc' },
         });
+    },
+    adjustStock: async (
+        variantId: string,
+        quantityDelta: number,
+        reason?: string
+    ): Promise<void> => {
+        try {
+            await prisma.productVariant.update({
+                where: { id: variantId },
+                data: {
+                    stock: {
+                        increment: quantityDelta,
+                    },
+                },
+            });
+
+        } catch (error) {
+            throw new Error("Failed to adjust inventory stock");
+        }
     },
 };
 

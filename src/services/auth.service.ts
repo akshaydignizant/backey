@@ -898,12 +898,23 @@ export const authService = {
               country: true,
             },
           },
+          Address: { // Fetch all addresses associated with the user
+            select: {
+              id: true,
+              address: true,
+              street: true,
+              city: true,
+              region: true,
+              country: true,
+              postalCode: true,
+            },
+          },
           updatedAt: true,
         },
       });
 
       return {
-        ...user
+        ...user,
       };
     } catch (error) {
       console.error(error);

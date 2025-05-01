@@ -25,18 +25,22 @@ import {
   getOrdersByDateRangeController,
   getAllOrderItems,
   getOrdersAddress,
+  cancelOrderController,
 } from '../controllers/order.controller';
 import { createCheckoutSession, orderConfirmation, paymentCancelled, paymentSuccess } from '../controllers/payment.controller';
 import { handleStripeWebhook } from '../controllers/webhookController';
 import express from 'express';
+import roleRestriction from '../middleware/roleRestriction';
+import { Role } from '@prisma/client';
 
 const router = Router();
 
 /**
  * Basic Order Operations
  */
-router.post('/workspaces/:workspaceId/orders', authMiddleware, createOrder);
-
+router.post('/', authMiddleware, createOrder);
+// Route to cancel an order
+router.post('/:orderId/cancel', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), cancelOrderController);
 router.get('/ordersAddress', authMiddleware, getOrdersAddress); // Get all orders for a workspace
 
 router.post('/checkout', createCheckoutSession); // Initiates Stripe Checkout
