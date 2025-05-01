@@ -71,8 +71,8 @@ router.get('/workspaces/:workspaceId/orders/status/:status', authMiddleware, get
 /**
  * Order by User & Reorder
  */
-router.get('/workspaces/:workspaceId/users/:userId/orders', authMiddleware, getOrdersByUser);
-router.post('/workspaces/:workspaceId/orders/:orderId/reorder', authMiddleware, reorder);
+router.get('/users/:userId/orders', authMiddleware, getOrdersByUser);
+router.post('/:orderId/reorder', authMiddleware, reorder);
 
 /**
  * Summary, History, Invoice

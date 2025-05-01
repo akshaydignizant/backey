@@ -22,6 +22,7 @@ import reportRoutes from './routers/report.routes';
 import inventoryRoutes from './routers/inventory.routes';
 import notificationRoutes from './routers/notification.routes';
 import billRoutes from './routers/billing.route';
+import cartRoutes from './routers/cart.routes';
 
 // Load environment variables
 dotenv.config();
@@ -42,7 +43,7 @@ app.use(compression());
 app.use(
   cors({
     origin: [
-      'http://localhost:3000',
+      'http://localhost:3000', 'http://localhost:3001',
       'https://6b15-2402-a00-162-ea17-2920-87a2-2713-905.ngrok-free.app', // adjust for development or production
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD'],
@@ -71,6 +72,7 @@ app.use('/api/v1/reports', reportRoutes);
 app.use('/api/v1/inventory', inventoryRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/bills', billRoutes);
+app.use('/api/v1/cart', cartRoutes);
 
 // 404 Not Found handler
 app.use((req: Request, _res: Response, next: NextFunction) => {

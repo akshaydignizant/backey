@@ -385,16 +385,15 @@ export const updatePaymentStatus = async (req: AuthRequest, res: Response, next:
 };
 
 export const getOrdersByStatus = async (req: AuthRequest, res: Response, next: NextFunction) => {
-  const workspaceId = Number(req.params.workspaceId);
   const status = req.params.status as OrderStatus;
   const authUserId = req.user?.userId;
 
-  if (isNaN(workspaceId) || !status || !authUserId) {
-    return httpResponse(req, res, 400, 'Invalid workspace ID or status');
+  if (!status || !authUserId) {
+    return httpResponse(req, res, 400, 'Invalid status or user credentials.');
   }
 
   try {
-    const orders = await orderService.getOrdersByStatus(workspaceId, status, authUserId);
+    const orders = await orderService.getOrdersByStatus(status, authUserId); // workspaceId removed
     return httpResponse(req, res, 200, 'Orders retrieved successfully', orders);
   } catch (error) {
     return httpError(next, error, req);
@@ -402,16 +401,15 @@ export const getOrdersByStatus = async (req: AuthRequest, res: Response, next: N
 };
 
 export const getOrdersByUser = async (req: AuthRequest, res: Response, next: NextFunction) => {
-  const workspaceId = Number(req.params.workspaceId);
   const userId = req.params.userId;
   const authUserId = req.user?.userId;
 
-  if (isNaN(workspaceId) || !userId || !authUserId) {
+  if (!userId || !authUserId) {
     return httpResponse(req, res, 400, 'Invalid workspace ID or user ID');
   }
 
   try {
-    const orders = await orderService.getOrdersByUser(workspaceId, userId, authUserId);
+    const orders = await orderService.getOrdersByUser(userId);
     return httpResponse(req, res, 200, 'Orders retrieved successfully', orders);
   } catch (error) {
     return httpError(next, error, req);
@@ -420,11 +418,10 @@ export const getOrdersByUser = async (req: AuthRequest, res: Response, next: Nex
 
 // Controller
 export const getOrdersByDateRangeController = async (req: AuthRequest, res: Response, next: NextFunction) => {
-  const workspaceId = Number(req.params.workspaceId);
   const { startDate, endDate } = req.query;
   const authUserId = req.user?.userId;
 
-  if (isNaN(workspaceId) || !startDate || !endDate || !authUserId) {
+  if (!startDate || !endDate || !authUserId) {
     return httpResponse(req, res, 400, 'Invalid workspace ID or date range');
   }
 
@@ -436,7 +433,7 @@ export const getOrdersByDateRangeController = async (req: AuthRequest, res: Resp
   }
 
   try {
-    const orders = await orderService.getOrdersByDateRange(workspaceId, start, end, authUserId);
+    const orders = await orderService.getOrdersByDateRange(start, end, authUserId);
     return httpResponse(req, res, 200, 'Orders retrieved successfully', orders);
   } catch (error) {
     return httpError(next, error, req);
@@ -480,16 +477,15 @@ export const assignDeliveryPartner = async (req: AuthRequest, res: Response, nex
 };
 
 export const cloneOrder = async (req: AuthRequest, res: Response, next: NextFunction) => {
-  const workspaceId = Number(req.params.workspaceId);
   const orderId = req.params.orderId;
   const authUserId = req.user?.userId;
 
-  if (isNaN(workspaceId) || !orderId || !authUserId) {
-    return httpResponse(req, res, 400, 'Invalid workspace ID or order ID');
+  if (!orderId || !authUserId) {
+    return httpResponse(req, res, 400, 'Missing order ID or user credentials.');
   }
 
   try {
-    const order = await orderService.cloneOrder(workspaceId, orderId, authUserId);
+    const order = await orderService.cloneOrder(orderId);
     return httpResponse(req, res, 201, 'Order cloned successfully', order);
   } catch (error) {
     return httpError(next, error, req);
@@ -497,17 +493,15 @@ export const cloneOrder = async (req: AuthRequest, res: Response, next: NextFunc
 };
 
 export const reorder = async (req: AuthRequest, res: Response, next: NextFunction) => {
-  const workspaceId = Number(req.params.workspaceId);
   const orderId = req.params.orderId;
   const authUserId = req.user?.userId;
 
-  // Validate inputs
-  if (!authUserId || !orderId || isNaN(workspaceId)) {
-    return httpResponse(req, res, 400, 'Invalid workspace ID, order ID, or user credentials.');
+  if (!authUserId || !orderId) {
+    return httpResponse(req, res, 400, 'Missing user or order ID.');
   }
 
   try {
-    const newOrder = await orderService.reorder(workspaceId, orderId, authUserId);
+    const newOrder = await orderService.reorder(orderId, authUserId);
     return httpResponse(req, res, 201, 'Order re-created successfully', newOrder);
   } catch (error) {
     return httpError(next, error, req);

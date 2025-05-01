@@ -555,32 +555,26 @@ export const cancelOrder = async (
   orderId: string,
   authUserId: string
 ) => {
-  // Start a transaction
+  let order: any;
+  let updatedOrder: any;
+
   const result = await prisma.$transaction(async (tx) => {
-    // Find the order to cancel
-    const order = await tx.order.findUnique({
+    order = await tx.order.findUnique({
       where: { id: orderId },
       include: {
         items: true,
-        user: true,  // Include the user for email notification
+        user: true,
       },
     });
 
-    if (!order) {
-      throw new Error('Order not found');
-    }
+    if (!order) throw new Error('Order not found');
+    if (order.status === 'CANCELLED') throw new Error('Order already cancelled');
 
-    if (order.status === 'CANCELLED') {
-      throw new Error('Order has already been cancelled');
-    }
-
-    // Update the order status to "CANCELLED"
-    const updatedOrder = await tx.order.update({
+    updatedOrder = await tx.order.update({
       where: { id: orderId },
       data: { status: 'CANCELLED' },
     });
 
-    // Create a cancellation status history entry
     await tx.orderStatusHistory.create({
       data: {
         orderId: updatedOrder.id,
@@ -591,12 +585,10 @@ export const cancelOrder = async (
       },
     });
 
-    // Revert the stock changes if the order was previously processed or payment was made
     if (order.status !== 'PENDING' && order.paymentMethod !== 'CASH') {
-      await revertStock(order.items, tx);  // Pass the transaction to ensure atomicity
+      await revertStock(order.items, tx); // Make sure revertStock is optimized
     }
 
-    // Create a cancellation notification (no workspace anymore)
     await tx.notification.create({
       data: {
         userId: authUserId,
@@ -607,20 +599,25 @@ export const cancelOrder = async (
       },
     });
 
-    // Send cancellation email
-    const emailTemplate = `
-      <p>Your order #${orderId} has been cancelled.</p>
-      <p>For any queries, please contact support.</p>
-    `;
-    await sendEmail(order.user.email, 'Order Cancelled', emailTemplate);
-
     return {
-      message: `Order #${orderId} has been successfully cancelled.`,
+      message: `Order #${orderId} successfully cancelled.`,
       status: updatedOrder.status,
+      userEmail: order.user.email, // Pass for later use
     };
   });
 
-  return result;
+  // Send email OUTSIDE transaction
+  sendEmail(
+    result.userEmail,
+    'Order Cancelled',
+    `<p>Your order #${orderId} has been cancelled.</p><p>For any queries, please contact support.</p>`
+  ).catch((err) => {
+    console.error(`Failed to send cancellation email for order ${orderId}:`, err);
+  });
+
+  // Strip userEmail before returning
+  const { userEmail, ...cleanResult } = result;
+  return cleanResult;
 };
 
 export const getOrder = async (workspaceId: number, orderId: string, authUserId: string) => {
@@ -934,34 +931,41 @@ export const updatePaymentStatus = async (workspaceId: number, orderId: string, 
   });
 };
 
-export const getOrdersByStatus = async (workspaceId: number, status: OrderStatus, authUserId: string) => {
-  await checkPermission(workspaceId, authUserId, 'VIEW_ORDERS');
+export const getOrdersByStatus = async (
+  status: OrderStatus,
+  authUserId: string
+) => {
   return prisma.order.findMany({
-    where: { workspaceId, status },
-    include: { items: { include: { variant: true } }, user: true, shippingAddress: true, billingAddress: true },
+    where: {
+      userId: authUserId,
+      status,
+    },
+    include: {
+      items: {
+        include: { variant: true },
+      },
+      user: true,
+      shippingAddress: true,
+      billingAddress: true,
+    },
   });
 };
-
-export const getOrdersByUser = async (workspaceId: number, userId: string, authUserId: string) => {
-  await checkPermission(workspaceId, authUserId, 'VIEW_ORDERS');
+export const getOrdersByUser = async (userId: string) => {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new Error('User not found');
 
   return prisma.order.findMany({
-    where: { workspaceId, userId },
+    where: { userId },
     include: { items: { include: { variant: true } }, user: true, shippingAddress: true, billingAddress: true },
   });
 };
 
 export const getOrdersByDateRange = async (
-  workspaceId: number,
   start: Date,
   end: Date,
   authUserId: string
 ) => {
   try {
-    await checkPermission(workspaceId, authUserId, 'VIEW_ORDERS');
-
     // Validate dates
     if (start > end) {
       throw new Error('Start date cannot be after end date');
@@ -969,7 +973,6 @@ export const getOrdersByDateRange = async (
 
     const orders = await prisma.order.findMany({
       where: {
-        workspaceId,
         placedAt: {
           gte: start,
           lte: end
@@ -1043,19 +1046,23 @@ export const assignDeliveryPartner = async (workspaceId: number, orderId: string
   });
 };
 
-export const cloneOrder = async (workspaceId: number, orderId: string, authUserId: string) => {
-  await checkPermission(workspaceId, authUserId, 'CREATE_ORDER');
+export const cloneOrder = async (
+  orderId: string
+) => {
   const order = await prisma.order.findUnique({
-    where: { id: orderId, workspaceId },
+    where: { id: orderId },
     include: { items: true },
   });
+
   if (!order) throw new Error('Order not found');
+
+  // Optional: Add a permission check here if needed, using order.workspaceId
 
   return prisma.$transaction(async (tx) => {
     const newOrder = await tx.order.create({
       data: {
         userId: order.userId,
-        workspaceId,
+        workspaceId: order.workspaceId, // still using original order's workspaceId
         shippingAddressId: order.shippingAddressId,
         billingAddressId: order.billingAddressId,
         paymentMethod: order.paymentMethod,
@@ -1069,7 +1076,12 @@ export const cloneOrder = async (workspaceId: number, orderId: string, authUserI
           })),
         },
       },
-      include: { items: true, user: true, shippingAddress: true, billingAddress: true },
+      include: {
+        items: true,
+        user: true,
+        shippingAddress: true,
+        billingAddress: true,
+      },
     });
 
     await Promise.all(
@@ -1084,47 +1096,45 @@ export const cloneOrder = async (workspaceId: number, orderId: string, authUserI
     return newOrder;
   });
 };
-
-export const reorder = async (workspaceId: number, orderId: string, authUserId: string) => {
-  await checkPermission(workspaceId, authUserId, 'CREATE_ORDER');
-
+// services/orderService.ts
+export const reorder = async (
+  orderId: string,
+  authUserId: string
+) => {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
-    include: { items: true }
+    include: { items: true },
   });
 
   if (!order) {
     throw new Error('Original order not found');
   }
 
-  if (order.workspaceId !== workspaceId) {
-    throw new Error('Order does not belong to this workspace');
-  }
-
-  // Duplicate the order logic
+  // Duplicate order using its own workspaceId
   const newOrder = await prisma.order.create({
     data: {
       userId: authUserId,
-      workspaceId,
+      workspaceId: order.workspaceId, // use from original order
       shippingAddressId: order.shippingAddressId,
       billingAddressId: order.billingAddressId,
       paymentMethod: order.paymentMethod,
       totalAmount: order.totalAmount,
-      status: 'PENDING', // resetting status
+      status: 'PENDING',
       notes: `Reorder of ${orderId}`,
       items: {
-        create: order.items.map(item => ({
+        create: order.items.map((item) => ({
           variantId: item.variantId,
           quantity: item.quantity,
-          price: item.price
-        }))
-      }
+          price: item.price,
+        })),
+      },
     },
-    include: { items: true }
+    include: { items: true },
   });
 
   return newOrder;
 };
+
 
 export const notifyOrderStatus = async (
   workspaceId: number,
