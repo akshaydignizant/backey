@@ -103,27 +103,27 @@ export const paymentSuccess = async (req: Request, res: Response, next: NextFunc
     const returnJson = req.query.json === 'true' || req.headers.accept?.includes('application/json');
 
     if (!sessionId) {
-      res.status(400).json({ success: false, message: 'Missing session ID' });
-      return
+      return httpError(next, new Error('Missing session ID'), req, 400);
     }
 
     const session = await stripe.checkout.sessions.retrieve(sessionId);
     const orderId = session.metadata?.orderId;
 
-    if (!session || session.payment_status !== 'paid') {
-      res.status(400).json({ success: false, message: 'Payment not completed or session invalid' });
-      return
+    if (!session || session.payment_status !== 'paid' || !orderId) {
+      return httpError(next, new Error('Payment not completed or invalid session/order ID'), req, 400);
     }
 
-    // Update order status to PAID
+    // Update order status and payment info
     await prisma.order.update({
       where: { id: orderId },
       data: {
-        status: OrderStatus.DELIVERED, // Use enum OrderStatus.PAID if importing it
+        status: 'PROCESSING', // OR use an enum like OrderStatus.PROCESSING
+        paymentStatus: 'COMPLETED',
         paidAt: new Date(),
         paymentDetails: {
+          // Prisma expects JSON-compatible values
           stripeSessionId: session.id,
-          paymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id || null,
+          paymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : (session.payment_intent as any)?.id ?? null,
           amountPaid: (session.amount_total ?? 0) / 100,
           currency: session.currency
         }
@@ -139,12 +139,13 @@ export const paymentSuccess = async (req: Request, res: Response, next: NextFunc
         amount_total: session.amount_total,
         customer_email: session.customer_details?.email
       });
+      return;
     }
 
     return res.redirect(`${process.env.FRONTEND_URL}/order-confirmation?order_id=${orderId}`);
   } catch (error) {
     logger.error('Payment success handler error', error);
-    next(error);
+    return next(error);
   }
 };
 
@@ -156,8 +157,10 @@ export const paymentCancelled = async (req: Request, res: Response): Promise<voi
       success: false,
       message: 'Payment was cancelled by the user.'
     });
+    return;
   }
-
+  res.redirect(`${process.env.FRONTEND_URL}/checkout-cancelled`);
+  return;
   res.redirect(`${process.env.FRONTEND_URL}/checkout-cancelled`);
 };
 

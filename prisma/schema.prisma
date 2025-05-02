@@ -190,6 +190,7 @@ model Order {
   billingAddressId   String
   workspaceId        Int
   paymentMethod      PaymentMethod
+  paymentStatus      PaymentStatus        @default(PENDING)
   totalAmount        Float
   status             OrderStatus          @default(PENDING)
   notes              String?
@@ -387,4 +388,11 @@ enum BillStatus {
   PENDING
   PAID
   CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
 }

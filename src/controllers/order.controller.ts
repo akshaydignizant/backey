@@ -146,7 +146,7 @@ const handleCashPayment = async (req: AuthRequest, res: Response, next: NextFunc
 const handleStripePayment = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    const { items, notes, successUrl, cancelUrl } = req.body;
+    const { items, notes, successUrl, cancelUrl, shippingAddressId, billingAddressId, shippingAddress, billingAddress } = req.body;
 
     if (!userId) {
       return httpResponse(req, res, 400, 'User ID is required');
@@ -160,27 +160,48 @@ const handleStripePayment = async (req: AuthRequest, res: Response, next: NextFu
       return httpResponse(req, res, 400, 'Success and cancel URLs are required');
     }
 
+    // Generate order preview for line items
     const orderPreview = await orderService.getOrderPreview(items, userId);
 
     if (!orderPreview || !orderPreview.lineItems || orderPreview.lineItems.length === 0) {
       return httpResponse(req, res, 400, 'Invalid order preview');
     }
 
-    if (!process.env.FRONTEND_URL) {
-      return httpResponse(req, res, 500, 'Frontend URL is not configured');
-    }
+    // Step 1: Create the order with status 'PENDING'
+    const order = await orderService.createOrder(
+      {
+        userId,
+        shippingAddressId,
+        billingAddressId,
+        shippingAddress,
+        billingAddress,
+        paymentMethod: PaymentMethod.STRIPE, // use CARD for Stripe payment
+        items,
+        notes,
+        status: 'PENDING', // Ensure status is PENDING
+      },
+      userId
+    );
 
+    // Step 2: Create the Stripe session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: orderPreview.lineItems,
       mode: 'payment',
       metadata: {
+        orderId: order.orderId,
         userId,
         notes: notes || '',
         items: JSON.stringify(items),
       },
-      success_url: successUrl, // Use frontend-provided successUrl
-      cancel_url: cancelUrl,   // Use frontend-provided cancelUrl
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+    });
+
+    // Optional: Save session ID on order now or via webhook later
+    await prisma.order.update({
+      where: { id: order.orderId },
+      data: { stripeSessionId: session.id },
     });
 
     return res.status(200).json({ url: session.url, session_id: session.id });
@@ -189,6 +210,7 @@ const handleStripePayment = async (req: AuthRequest, res: Response, next: NextFu
     return httpError(next, error, req);
   }
 };
+
 
 export const cancelOrderController = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { orderId } = req.params;

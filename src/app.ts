@@ -44,13 +44,12 @@ app.use(
   cors({
     origin: [
       'http://localhost:3000', 'http://localhost:3001',
-      'https://6b15-2402-a00-162-ea17-2920-87a2-2713-905.ngrok-free.app', // adjust for development or production
+      'https://48c9-2402-a00-162-ea17-b1cc-fa3f-8210-4bcb.ngrok-free.app', // adjust for development or production
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD'],
     credentials: true,
   })
 );
-
 // Parse incoming JSON requests
 app.use(express.json());
 
