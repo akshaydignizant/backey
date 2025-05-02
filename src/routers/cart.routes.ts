@@ -24,10 +24,10 @@ router.get('/', getUserCart);
 router.get('/summary', getCartSummary);
 
 // Update cart item quantity
-router.put('/:cartItemId', updateCartItemQuantity);
+router.put('/:variantId', updateCartItemQuantity);
 
 // Remove item from cart
-router.delete('/:cartItemId', deleteCartItem);
+router.delete('/:variantId', deleteCartItem);
 
 // Clear entire cart
 router.delete('/', emptyCart);

@@ -1,6 +1,6 @@
 // src/services/cart.service.ts
 
-import prisma from "../util/prisma";
+import prisma from '../util/prisma';
 
 export const addToCart = async (
   userId: string,
@@ -66,53 +66,74 @@ export const getCartItems = async (userId: string) => {
   });
 };
 
-export const updateCartItem = async (
-  cartItemId: string,
+export const updateCartItemByVariant = async (
   userId: string,
+  variantId: string,
   quantity: number
 ) => {
-  // Verify the item exists and belongs to the user
+  // Find the existing cart item
   const existingItem = await prisma.cartItem.findFirst({
-    where: { id: cartItemId, userId },
-    include: { variant: true },
+    where: {
+      userId,
+      variantId,
+    },
+    include: {
+      variant: true,
+    },
   });
 
   if (!existingItem) {
     throw new Error('Cart item not found');
   }
 
-  // Check stock availability
+  // Check stock
   if (existingItem.variant.stock < quantity) {
     throw new Error('Insufficient stock available');
   }
 
   if (quantity <= 0) {
-    // Remove item if quantity is 0 or less
-    return await removeFromCart(cartItemId, userId);
+    // Remove the item from cart
+    return await prisma.cartItem.delete({
+      where: {
+        id: existingItem.id,
+      },
+    });
   }
 
   // Update quantity
   return await prisma.cartItem.update({
-    where: { id: cartItemId },
-    data: { quantity },
-    include: { variant: true },
+    where: {
+      id: existingItem.id,
+    },
+    data: {
+      quantity,
+    },
+    include: {
+      variant: true,
+    },
   });
 };
 
-export const removeFromCart = async (cartItemId: string, userId: string) => {
+
+export const removeFromCart = async (variantId: string, userId: string) => {
   // Verify the item exists and belongs to the user
-  const existingItem = await prisma.cartItem.findFirst({
-    where: { id: cartItemId, userId },
-  });
+  try {
+    const existingItem = await prisma.cartItem.findFirst({
+      where: { variantId, userId },
+    });
 
-  if (!existingItem) {
-    throw new Error('Cart item not found');
+    if (!existingItem) {
+      throw new Error('Cart item not found');
+    }
+
+    return await prisma.cartItem.delete({
+      where: { id: existingItem.id },
+      include: { variant: true },
+    });
+  } catch (error) {
+    console.error('Error removing cart item by variant:', error);
+    throw new Error('Failed to remove cart item');
   }
-
-  return await prisma.cartItem.delete({
-    where: { id: cartItemId },
-    include: { variant: true },
-  });
 };
 
 export const clearCart = async (userId: string) => {

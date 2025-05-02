@@ -2,11 +2,11 @@
 import {
   addToCart,
   getCartItems,
-  updateCartItem,
   removeFromCart,
   clearCart,
   getCartTotal,
   checkCartItemsAvailability,
+  updateCartItemByVariant,
 } from '../services/cart.service';
 import { NextFunction, Request, Response } from 'express';
 import httpError from '../util/httpError';
@@ -20,7 +20,7 @@ export const addItemToCart = async (req: Request, res: Response, next: NextFunct
     if (!userId || !variantId) {
       return httpError(next, new Error('Invalid input data'), req, 400);
     }
-    const cartItem = await addToCart(userId as string, variantId, quantity);
+    const cartItem = await addToCart(userId, variantId, quantity);
     return httpResponse(req, res, 201, 'Item added to cart successfully', cartItem);
   } catch (error) {
     return httpError(next, error, req, 400);
@@ -40,11 +40,20 @@ export const getUserCart = async (req: Request, res: Response, next: NextFunctio
 
 export const updateCartItemQuantity = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { cartItemId } = req.params;
+    const { variantId } = req.params;
     const { quantity } = req.body;
     const userId = req.user?.userId;
 
-    const updatedItem = await updateCartItem(cartItemId, userId as string, quantity);
+    if (!userId) {
+      throw new Error('Unauthorized: User not authenticated');
+    }
+
+    if (!variantId || typeof quantity !== 'number' || quantity < 0) {
+      throw new Error('Invalid variant ID or quantity');
+    }
+
+    const updatedItem = await updateCartItemByVariant(userId, variantId, quantity);
+
     return httpResponse(req, res, 200, 'Cart item updated successfully', updatedItem);
   } catch (error) {
     return httpError(next, error, req, 400);
@@ -53,9 +62,9 @@ export const updateCartItemQuantity = async (req: Request, res: Response, next: 
 
 export const deleteCartItem = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { cartItemId } = req.params;
+    const { variantId } = req.params;
     const userId = req.user?.userId;
-    const deletedItem = await removeFromCart(cartItemId, userId as string);
+    const deletedItem = await removeFromCart(variantId, userId as string);
     if (!deletedItem) {
       return httpError(next, new Error('Cart item not found'), req, 404);
     }
