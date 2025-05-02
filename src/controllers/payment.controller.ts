@@ -69,11 +69,12 @@ export const createCheckoutSession = async (req: Request, res: Response, next: N
       success_url: 'http://localhost:3000/order-confirmation/payment-success?session_id={CHECKOUT_SESSION_ID}',
       cancel_url: 'http://localhost:3000/payment-cancelled'
     });
-
-    res.status(200).json({ url: session.url });
+    // res.status(200).json({ url: session.url });
+    return httpResponse(req, res, 200, 'Checkout session created successfully', { url: session.url });
   } catch (error) {
     logger.error('Stripe checkout session error', error);
-    next(error);
+    return httpError(next, error, req);
+
   }
 };
 
@@ -103,27 +104,29 @@ export const paymentSuccess = async (req: Request, res: Response, next: NextFunc
     const returnJson = req.query.json === 'true' || req.headers.accept?.includes('application/json');
 
     if (!sessionId) {
-      return httpError(next, new Error('Missing session ID'), req, 400);
+      httpError(next, new Error('Missing session ID'), req, 400);
+      return;
     }
 
     const session = await stripe.checkout.sessions.retrieve(sessionId);
     const orderId = session.metadata?.orderId;
 
     if (!session || session.payment_status !== 'paid' || !orderId) {
-      return httpError(next, new Error('Payment not completed or invalid session/order ID'), req, 400);
+      httpError(next, new Error('Payment not completed or invalid session/order ID'), req, 400);
+      return;
     }
 
-    // Update order status and payment info
     await prisma.order.update({
       where: { id: orderId },
       data: {
-        status: 'PROCESSING', // OR use an enum like OrderStatus.PROCESSING
+        status: 'PROCESSING',
         paymentStatus: 'COMPLETED',
         paidAt: new Date(),
         paymentDetails: {
-          // Prisma expects JSON-compatible values
           stripeSessionId: session.id,
-          paymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : (session.payment_intent as any)?.id ?? null,
+          paymentIntentId: typeof session.payment_intent === 'string'
+            ? session.payment_intent
+            : (session.payment_intent as any)?.id ?? null,
           amountPaid: (session.amount_total ?? 0) / 100,
           currency: session.currency
         }
@@ -131,35 +134,32 @@ export const paymentSuccess = async (req: Request, res: Response, next: NextFunc
     });
 
     if (returnJson) {
-      res.status(200).json({
-        success: true,
-        message: 'Payment successful',
+      httpResponse(req, res, 200, 'Payment successful', {
         orderId,
         sessionId,
         amount_total: session.amount_total,
         customer_email: session.customer_details?.email
       });
-      return;
+    } else {
+      res.redirect(`${process.env.FRONTEND_URL}/order-confirmation?order_id=${orderId}`);
     }
   } catch (error) {
     logger.error('Payment success handler error', error);
-    return next(error);
+    httpError(next, error, req);
   }
 };
+
 
 export const paymentCancelled = async (req: Request, res: Response): Promise<void> => {
   const returnJson = req.query.json === 'true' || req.headers.accept?.includes('application/json');
 
   if (returnJson) {
-    res.status(200).json({
-      success: false,
-      message: 'Payment was cancelled by the user.'
-    });
-    return;
+    httpResponse(req, res, 200, 'Payment was cancelled by the user.');
+  } else {
+    res.redirect(`${process.env.FRONTEND_URL}/checkout-cancelled`);
   }
-  // res.redirect(`${process.env.FRONTEND_URL}/checkout-cancelled`);
-  // return;
 };
+
 
 // controllers/order.controller.ts
 export const orderConfirmation = async (req: Request, res: Response): Promise<void> => {
