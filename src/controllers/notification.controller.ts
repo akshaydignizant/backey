@@ -128,23 +128,6 @@ export const updateNotification = async (req: Request, res: Response) => {
     res.json(result);
 };
 
-// export const sendNotificationToUser = async (req: Request, res: Response) => {
-//     const { userId } = req.params;
-//     const workspaceId = parseInt(req.params.workspaceId);
-//     const data = req.body;
-
-//     try {
-//         const io = req.app.get('io'); // Socket.IO instance
-
-//         const result = await notificationService.sendToUser(workspaceId, userId, data, io);
-
-//         res.status(200).json(result);
-//     } catch (error) {
-//         console.error('sendNotificationToUser error:', error);
-//         res.status(500).json({ message: 'Failed to send notification' });
-//     }
-// };
-
 export const sendNotificationToUser = async (req: Request, res: Response) => {
     const { userIds } = req.body;
     const workspaceId = parseInt(req.params.workspaceId);

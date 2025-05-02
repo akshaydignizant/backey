@@ -226,7 +226,7 @@ export const getProducts = async (req: Request, res: Response, next: NextFunctio
     return httpResponse(req, res, 200, 'Products fetched', products);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Something went wrong" });
+    res.status(500).json({ error: 'Something went wrong' });
   }
 };
 

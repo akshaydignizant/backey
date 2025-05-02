@@ -1,6 +1,6 @@
 // import prisma from "./prisma";
 
-import prisma from "./prisma";
+import prisma from './prisma';
 
 // export const checkPermission = async (workspaceId: number, userId: string, permission: string) => {
 //   const rolePermission = await prisma.rolePermission.findFirst({
@@ -45,7 +45,7 @@ export const checkPermission = async (workspaceId: number, userId: string, permi
   });
 
   if (!userRole) {
-    throw new Error("User does not have a role in this workspace");
+    throw new Error('User does not have a role in this workspace');
   }
 
   if (userRole.role === 'ADMIN') return;
@@ -59,6 +59,6 @@ export const checkPermission = async (workspaceId: number, userId: string, permi
   });
 
   if (!rolePermission) {
-    throw new Error("Insufficient permissions");
+    throw new Error('Insufficient permissions');
   }
 };

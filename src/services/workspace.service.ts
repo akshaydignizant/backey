@@ -1207,7 +1207,7 @@ export const workspaceService = {
     // Create user if not exists
     let invitedUserId = existingUser?.id;
     let firstName = existingUser?.firstName ?? 'User';
-    let tempPassword = uuidv4().slice(0, 8); // always needed for invitation
+    const tempPassword = uuidv4().slice(0, 8); // always needed for invitation
 
     if (!existingUser) {
       const hashedPassword = await bcrypt.hash(tempPassword, 10);
@@ -1285,7 +1285,7 @@ export const workspaceService = {
         userId: invitedUserId!,
         title: 'Workspace Invitation',
         message: `You’ve been invited to ${workspace.name} as a ${role} and its workspaceId is ${workspace.id}.`,
-        type: "INVITATION",
+        type: 'INVITATION',
       },
       io
     );

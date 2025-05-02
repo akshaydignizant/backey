@@ -50,7 +50,7 @@ export const createCheckoutSession = async (req: Request, res: Response, next: N
     const userId = req.user?.userId;
     const { workspaceId, items, shippingAddress, billingAddress } = req.body;
 
-    const orderPreview = await getOrderPreview(workspaceId, items, userId as string);
+    const orderPreview = await getOrderPreview(items, userId as string);
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -64,13 +64,13 @@ export const createCheckoutSession = async (req: Request, res: Response, next: N
         billingAddress: JSON.stringify(billingAddress || {})
       },
       shipping_address_collection: { allowed_countries: ['US', 'BR'] },
-      success_url: "http://localhost:3000/api/v1/orders/payment-success?session_id={CHECKOUT_SESSION_ID}",
-      cancel_url: "http://localhost:3000/api/v1/orders/payment-cancelled"
+      success_url: 'http://localhost:3000/api/v1/orders/payment-success?session_id={CHECKOUT_SESSION_ID}',
+      cancel_url: 'http://localhost:3000/api/v1/orders/payment-cancelled'
     });
 
     res.status(200).json({ url: session.url });
   } catch (error) {
-    logger.error("Stripe checkout session error", error);
+    logger.error('Stripe checkout session error', error);
     next(error);
   }
 };
@@ -81,7 +81,7 @@ export const paymentSuccess = async (req: Request, res: Response, next: NextFunc
     const returnJson = req.query.json === 'true' || req.headers.accept?.includes('application/json');
 
     if (!sessionId) {
-      res.status(400).json({ success: false, message: "Missing session ID" });
+      res.status(400).json({ success: false, message: 'Missing session ID' });
       return
     }
 
@@ -89,7 +89,7 @@ export const paymentSuccess = async (req: Request, res: Response, next: NextFunc
     const orderId = session.metadata?.orderId;
 
     if (!session || session.payment_status !== 'paid') {
-      res.status(400).json({ success: false, message: "Payment not completed or session invalid" });
+      res.status(400).json({ success: false, message: 'Payment not completed or session invalid' });
       return
     }
 
@@ -111,7 +111,7 @@ export const paymentSuccess = async (req: Request, res: Response, next: NextFunc
     if (returnJson) {
       res.status(200).json({
         success: true,
-        message: "Payment successful",
+        message: 'Payment successful',
         orderId,
         sessionId,
         amount_total: session.amount_total,
@@ -121,7 +121,7 @@ export const paymentSuccess = async (req: Request, res: Response, next: NextFunc
 
     return res.redirect(`${process.env.FRONTEND_URL}/order-confirmation?order_id=${orderId}`);
   } catch (error) {
-    logger.error("Payment success handler error", error);
+    logger.error('Payment success handler error', error);
     next(error);
   }
 };
@@ -132,7 +132,7 @@ export const paymentCancelled = async (req: Request, res: Response): Promise<voi
   if (returnJson) {
     res.status(200).json({
       success: false,
-      message: "Payment was cancelled by the user."
+      message: 'Payment was cancelled by the user.'
     });
   }
 
@@ -147,14 +147,14 @@ export const orderConfirmation = async (req: Request, res: Response): Promise<vo
     const sessionId = req.query.session_id as string;
 
     if (!sessionId) {
-      res.status(400).json({ success: false, message: "Missing session ID" });
+      res.status(400).json({ success: false, message: 'Missing session ID' });
     }
 
     const session = await stripe.checkout.sessions.retrieve(sessionId);
 
     res.status(200).json({
       success: true,
-      message: "Order confirmed",
+      message: 'Order confirmed',
       sessionId,
       amount_total: session.amount_total,
       currency: session.currency,
@@ -162,7 +162,7 @@ export const orderConfirmation = async (req: Request, res: Response): Promise<vo
       payment_status: session.payment_status
     });
   } catch (error) {
-    logger.error("Order confirmation error", error);
-    res.status(500).json({ success: false, message: "Internal server error" });
+    logger.error('Order confirmation error', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };

@@ -1,8 +1,8 @@
-import { PrismaClient, PaymentMethod, BillStatus, BillItem as PrismaBillItem, Prisma } from "@prisma/client";
-import logger from "../util/logger";
-import { ApiError } from "../error/ApiError";
-import { calculateTotalAmount } from "../util/billing";
-import { inventoryService } from "./inventory.service";
+import { PrismaClient, PaymentMethod, BillStatus, BillItem as PrismaBillItem, Prisma } from '@prisma/client';
+import logger from '../util/logger';
+import { ApiError } from '../error/ApiError';
+import { calculateTotalAmount } from '../util/billing';
+import { inventoryService } from './inventory.service';
 
 const prisma = new PrismaClient({
     log: [
@@ -23,7 +23,7 @@ export const billService = {
      */
     createBill: async (userId: string, paymentMethod: PaymentMethod, items: PrismaBillItem[]) => {
         if (!items || items.length === 0) {
-            throw new ApiError(400, "Bill items cannot be empty");
+            throw new ApiError(400, 'Bill items cannot be empty');
         }
 
         try {
@@ -33,7 +33,7 @@ export const billService = {
                     where: { id: userId },
                 });
                 if (!user) {
-                    throw new ApiError(400, "Invalid user ID. User does not exist.");
+                    throw new ApiError(400, 'Invalid user ID. User does not exist.');
                 }
 
                 // 1. Validate all variants exist and have sufficient stock
@@ -44,7 +44,7 @@ export const billService = {
                 });
 
                 if (variants.length !== variantIds.length) {
-                    throw new ApiError(404, "One or more product variants not found");
+                    throw new ApiError(404, 'One or more product variants not found');
                 }
 
                 // 2. Check stock availability
@@ -54,7 +54,7 @@ export const billService = {
                 });
 
                 if (stockIssues.length > 0) {
-                    throw new ApiError(400, "Insufficient stock for one or more items");
+                    throw new ApiError(400, 'Insufficient stock for one or more items');
                 }
 
                 // 3. Calculate total amount
@@ -81,14 +81,14 @@ export const billService = {
                 // 5. Update inventory asynchronously
                 Promise.all(items.map(item =>
                     inventoryService.adjustStock(item.variantId, -item.quantity, `Bill ${bill.id}`)
-                )).catch(err => logger.error("Failed to update inventory", err));
+                )).catch(err => logger.error('Failed to update inventory', err));
 
                 return bill;
             });
         } catch (error) {
-            logger.error("Failed to create bill", { userId, error });
+            logger.error('Failed to create bill', { userId, error });
             if (error instanceof ApiError) throw error;
-            throw new ApiError(500, "Failed to create bill");
+            throw new ApiError(500, 'Failed to create bill');
         }
     },
 
@@ -164,8 +164,8 @@ export const billService = {
                 },
             };
         } catch (error) {
-            logger.error("Failed to fetch bills", { params, error });
-            throw new ApiError(500, "Failed to fetch bills");
+            logger.error('Failed to fetch bills', { params, error });
+            throw new ApiError(500, 'Failed to fetch bills');
         }
     },
 
@@ -205,14 +205,14 @@ export const billService = {
             });
 
             if (!bill) {
-                throw new ApiError(404, "Bill not found");
+                throw new ApiError(404, 'Bill not found');
             }
 
             return bill;
         } catch (error) {
-            logger.error("Failed to fetch bill", { billId, error });
+            logger.error('Failed to fetch bill', { billId, error });
             if (error instanceof ApiError) throw error;
-            throw new ApiError(500, "Failed to fetch bill");
+            throw new ApiError(500, 'Failed to fetch bill');
         }
     },
 
@@ -226,7 +226,7 @@ export const billService = {
             });
 
             if (!existingBill) {
-                throw new ApiError(404, "Bill not found");
+                throw new ApiError(404, 'Bill not found');
             }
 
             // Prevent certain fields from being updated
@@ -237,9 +237,9 @@ export const billService = {
                 data: updateData,
             });
         } catch (error) {
-            logger.error("Failed to update bill", { billId, error });
+            logger.error('Failed to update bill', { billId, error });
             if (error instanceof ApiError) throw error;
-            throw new ApiError(500, "Failed to update bill");
+            throw new ApiError(500, 'Failed to update bill');
         }
     },
 
@@ -253,7 +253,7 @@ export const billService = {
             });
 
             if (!existingBill) {
-                throw new ApiError(404, "Bill not found");
+                throw new ApiError(404, 'Bill not found');
             }
 
             return await prisma.bill.update({
@@ -261,9 +261,9 @@ export const billService = {
                 data: { isDeleted: true },
             });
         } catch (error) {
-            logger.error("Failed to delete bill", { billId, error });
+            logger.error('Failed to delete bill', { billId, error });
             if (error instanceof ApiError) throw error;
-            throw new ApiError(500, "Failed to delete bill");
+            throw new ApiError(500, 'Failed to delete bill');
         }
     },
 
@@ -306,8 +306,8 @@ export const billService = {
                 },
             };
         } catch (error) {
-            logger.error("Failed to fetch user bills", { userId, error });
-            throw new ApiError(500, "Failed to fetch user bills");
+            logger.error('Failed to fetch user bills', { userId, error });
+            throw new ApiError(500, 'Failed to fetch user bills');
         }
     },
 
@@ -333,14 +333,14 @@ export const billService = {
             });
 
             if (!items || items.length === 0) {
-                throw new ApiError(404, "No items found for this bill");
+                throw new ApiError(404, 'No items found for this bill');
             }
 
             return items;
         } catch (error) {
-            logger.error("Failed to fetch bill items", { billId, error });
+            logger.error('Failed to fetch bill items', { billId, error });
             if (error instanceof ApiError) throw error;
-            throw new ApiError(500, "Failed to fetch bill items");
+            throw new ApiError(500, 'Failed to fetch bill items');
         }
     },
 
@@ -349,7 +349,7 @@ export const billService = {
      */
     addItemsToBill: async (billId: string, items: Array<{ variantId: string; quantity: number }>) => {
         if (!items || items.length === 0) {
-            throw new ApiError(400, "Items cannot be empty");
+            throw new ApiError(400, 'Items cannot be empty');
         }
 
         try {
@@ -360,7 +360,7 @@ export const billService = {
                 });
 
                 if (!bill) {
-                    throw new ApiError(404, "Bill not found");
+                    throw new ApiError(404, 'Bill not found');
                 }
 
                 // 2. Validate all variants exist and have sufficient stock
@@ -371,7 +371,7 @@ export const billService = {
                 });
 
                 if (variants.length !== variantIds.length) {
-                    throw new ApiError(404, "One or more product variants not found");
+                    throw new ApiError(404, 'One or more product variants not found');
                 }
 
                 // 3. Check stock availability
@@ -381,7 +381,7 @@ export const billService = {
                 });
 
                 if (stockIssues.length > 0) {
-                    throw new ApiError(400, "Insufficient stock for one or more items");
+                    throw new ApiError(400, 'Insufficient stock for one or more items');
                 }
 
                 // 4. Create bill items
@@ -427,14 +427,14 @@ export const billService = {
                 // Fire and forget - errors already logged
                 Promise.all(inventoryUpdates)
                     .then(() => logger.info(`Inventory updated for bill ${billId}`))
-                    .catch(err => logger.error("Unexpected error in inventory updates", err));
+                    .catch(err => logger.error('Unexpected error in inventory updates', err));
 
                 return createdItems;
             });
         } catch (error) {
-            logger.error("Failed to add items to bill", { billId, error });
+            logger.error('Failed to add items to bill', { billId, error });
             if (error instanceof ApiError) throw error;
-            throw new ApiError(500, "Failed to add items to bill");
+            throw new ApiError(500, 'Failed to add items to bill');
         }
     },
 
@@ -443,7 +443,7 @@ export const billService = {
      */
     updateBillItem: async (itemId: string, data: { quantity?: number }) => {
         if (!data.quantity || data.quantity <= 0) {
-            throw new ApiError(400, "Quantity must be a positive number");
+            throw new ApiError(400, 'Quantity must be a positive number');
         }
 
         try {
@@ -455,7 +455,7 @@ export const billService = {
                 });
 
                 if (!item || item.bill.isDeleted) {
-                    throw new ApiError(404, "Bill item not found");
+                    throw new ApiError(404, 'Bill item not found');
                 }
 
                 // 2. Get the variant to check stock
@@ -465,13 +465,13 @@ export const billService = {
                 });
 
                 if (!variant) {
-                    throw new ApiError(404, "Product variant not found");
+                    throw new ApiError(404, 'Product variant not found');
                 }
 
                 // 3. Calculate stock difference
                 const quantityDifference = data.quantity! - item.quantity;
                 if (variant.stock < quantityDifference) {
-                    throw new ApiError(400, "Insufficient stock");
+                    throw new ApiError(400, 'Insufficient stock');
                 }
 
                 // 4. Update the item
@@ -501,14 +501,14 @@ export const billService = {
                     item.variantId,
                     -quantityDifference,
                     `Bill ${item.billId} update`
-                ).catch(err => logger.error("Failed to update inventory", err));
+                ).catch(err => logger.error('Failed to update inventory', err));
 
                 return updatedItem;
             });
         } catch (error) {
-            logger.error("Failed to update bill item", { itemId, error });
+            logger.error('Failed to update bill item', { itemId, error });
             if (error instanceof ApiError) throw error;
-            throw new ApiError(500, "Failed to update bill item");
+            throw new ApiError(500, 'Failed to update bill item');
         }
     },
 
@@ -525,7 +525,7 @@ export const billService = {
                 });
 
                 if (!item || item.bill.isDeleted) {
-                    throw new ApiError(404, "Bill item not found");
+                    throw new ApiError(404, 'Bill item not found');
                 }
 
                 // 2. Delete the item
@@ -554,14 +554,14 @@ export const billService = {
                     item.variantId,
                     item.quantity,
                     `Bill ${item.billId} item removal`
-                ).catch(err => logger.error("Failed to update inventory", err));
+                ).catch(err => logger.error('Failed to update inventory', err));
 
                 return { success: true };
             });
         } catch (error) {
-            logger.error("Failed to delete bill item", { itemId, error });
+            logger.error('Failed to delete bill item', { itemId, error });
             if (error instanceof ApiError) throw error;
-            throw new ApiError(500, "Failed to delete bill item");
+            throw new ApiError(500, 'Failed to delete bill item');
         }
     },
 
@@ -582,7 +582,7 @@ export const billService = {
             });
 
             if (!bill) {
-                throw new ApiError(404, "Bill not found");
+                throw new ApiError(404, 'Bill not found');
             }
 
             // Check if status transition is valid
@@ -604,14 +604,14 @@ export const billService = {
 
                 Promise.all(items.map(item =>
                     inventoryService.adjustStock(item.variantId, item.quantity, `Bill ${billId} cancellation`)
-                )).catch(err => logger.error("Failed to restock items", err));
+                )).catch(err => logger.error('Failed to restock items', err));
             }
 
             return updatedBill;
         } catch (error) {
-            logger.error("Failed to update bill status", { billId, status, error });
+            logger.error('Failed to update bill status', { billId, status, error });
             if (error instanceof ApiError) throw error;
-            throw new ApiError(500, "Failed to update bill status");
+            throw new ApiError(500, 'Failed to update bill status');
         }
     },
 };

@@ -230,7 +230,7 @@ export const inventoryService = {
                 <td>${item.sku}</td>
                 <td>${item.stock}</td>
                 <td>${item.price}</td>
-                <td>${item.size || "N/A"}</td>
+                <td>${item.size || 'N/A'}</td>
             </tr>
         `;
         }).join('');
@@ -546,7 +546,7 @@ export const inventoryService = {
             });
 
         } catch (error) {
-            throw new Error("Failed to adjust inventory stock");
+            throw new Error('Failed to adjust inventory stock');
         }
     },
 };

@@ -10,7 +10,7 @@ export const addToCart = async (
   // Check if variant exists and is available
   const variant = await prisma.productVariant.findUnique({
     where: { id: variantId, isAvailable: true },
-    select: { stock: true, product: { select: { workspaceId: true } } },
+    select: { stock: true, product: { select: { workspaceId: true, images: true } } },
   });
 
   if (!variant) {
@@ -22,6 +22,21 @@ export const addToCart = async (
     throw new Error('Insufficient stock available');
   }
 
+  // Include structure for product with images
+  const includeStructure = {
+    variant: {
+      include: {
+        product: {
+          select: {
+            name: true,
+            images: true,
+            // workspaceId: true,
+          },
+        },
+      },
+    },
+  };
+
   // Check if item already exists in cart
   const existingItem = await prisma.cartItem.findFirst({
     where: { userId, variantId },
@@ -32,7 +47,7 @@ export const addToCart = async (
     return await prisma.cartItem.update({
       where: { id: existingItem.id },
       data: { quantity: existingItem.quantity + quantity },
-      include: { variant: true },
+      include: includeStructure,
     });
   }
 
@@ -43,9 +58,10 @@ export const addToCart = async (
       variantId,
       quantity,
     },
-    include: { variant: true },
+    include: includeStructure,
   });
 };
+
 
 export const getCartItems = async (userId: string) => {
   return await prisma.cartItem.findMany({

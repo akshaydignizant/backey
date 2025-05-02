@@ -1,5 +1,5 @@
-import { Role } from "@prisma/client";
-import { Request } from "express";
+import { Role } from '@prisma/client';
+import { Request } from 'express';
 import jwt from 'jsonwebtoken';
 export type THttpResponse = {
     success: boolean
@@ -31,7 +31,7 @@ export interface AuthRequest extends Request {
     user?: any;
 }
 
-declare module "express-serve-static-core" {
+declare module 'express-serve-static-core' {
     interface Request {
         user?: {
             userId: string;

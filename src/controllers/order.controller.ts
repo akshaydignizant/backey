@@ -146,22 +146,17 @@ const handleCashPayment = async (req: AuthRequest, res: Response, next: NextFunc
 const handleStripePayment = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    const workspaceId = Number(req.params.workspaceId);
     const { items, notes } = req.body;
 
     if (!userId) {
       return httpResponse(req, res, 400, 'User ID is required');
     }
 
-    if (!workspaceId || isNaN(workspaceId)) {
-      return httpResponse(req, res, 400, 'Invalid workspace ID');
-    }
-
     if (!Array.isArray(items) || items.length === 0) {
       return httpResponse(req, res, 400, 'Items are required');
     }
 
-    const orderPreview = await orderService.getOrderPreview(workspaceId, items, userId);
+    const orderPreview = await orderService.getOrderPreview(items, userId as string);
 
     if (!orderPreview || !orderPreview.lineItems || orderPreview.lineItems.length === 0) {
       return httpResponse(req, res, 400, 'Invalid order preview');
@@ -177,7 +172,6 @@ const handleStripePayment = async (req: AuthRequest, res: Response, next: NextFu
       mode: 'payment',
       metadata: {
         userId,
-        workspaceId,
         notes: notes || '',
         items: JSON.stringify(items),
       },
@@ -188,7 +182,7 @@ const handleStripePayment = async (req: AuthRequest, res: Response, next: NextFu
     return res.status(200).json({ url: session.url, session_id: session.id });
 
   } catch (error) {
-    logger.error("Stripe session error", error); // Log the error message for more context
+    logger.error('Stripe session error', error); // Log the error message for more context
     return httpError(next, error, req);
   }
 };
@@ -202,7 +196,7 @@ export const cancelOrderController = async (req: Request, res: Response, next: N
   }
   try {
     // Call cancel order service
-    const result = await orderService.cancelOrder(orderId, authUserId as string);
+    const result = await orderService.cancelOrder(orderId, authUserId);
 
     // Respond with the result
     return httpResponse(req, res, 200, 'Order cancelled successfully', result);
@@ -225,7 +219,7 @@ export const getOrdersAddress = async (req: AuthRequest, res: Response, next: Ne
       return httpResponse(req, res, 400, 'Invalid order status');
     }
 
-    const addresses = await orderService.getOrdersAddress(status as OrderStatus, authUserId);
+    const addresses = await orderService.getOrdersAddress(status, authUserId);
     return httpResponse(req, res, 200, 'Addresses retrieved successfully', addresses);
   } catch (error) {
     return httpError(next, error, req);

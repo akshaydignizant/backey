@@ -253,6 +253,7 @@ export const createOrder = async (
   authUserId: string
 ) => {
   try {
+    // Parallelize user and variant fetching
     const [user, variants] = await Promise.all([
       prisma.user.findUniqueOrThrow({
         where: { id: data.userId },
@@ -679,7 +680,7 @@ export const getOrdersAddress = async (
   return Array.from(uniqueAddresses.values());
 };
 
-export const getOrderPreview = async (workspaceId: number, items: any[], userId: string) => {
+export const getOrderPreview = async (items: any[], userId: string) => {
   const variants = await prisma.productVariant.findMany({
     where: {
       id: {
@@ -710,7 +711,7 @@ export const getOrderPreview = async (workspaceId: number, items: any[], userId:
 
 export const createFinalOrderFromSession = async (session: Stripe.Checkout.Session) => {
   if (!session.metadata) {
-    throw new Error("Session metadata is missing");
+    throw new Error('Session metadata is missing');
   }
   const userId = session.metadata.userId;
   const items = JSON.parse(session.metadata.items);
@@ -759,10 +760,10 @@ export const updateOrder = async (
   if (data.paymentMethod) updateData.paymentMethod = data.paymentMethod;
   if (data.notes !== undefined) updateData.notes = data.notes;
   if (data.paymentMethod) {
-    if (!Object.values(PaymentMethod).includes(data.paymentMethod as PaymentMethod)) {
+    if (!Object.values(PaymentMethod).includes(data.paymentMethod)) {
       throw new Error('Invalid payment method');
     }
-    updateData.paymentMethod = data.paymentMethod as PaymentMethod;
+    updateData.paymentMethod = data.paymentMethod;
   }
   // 🚫 No fields to update
   if (Object.keys(updateData).length === 0) {
