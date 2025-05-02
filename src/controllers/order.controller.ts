@@ -146,7 +146,7 @@ const handleCashPayment = async (req: AuthRequest, res: Response, next: NextFunc
 const handleStripePayment = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    const { items, notes } = req.body;
+    const { items, notes, successUrl, cancelUrl } = req.body;
 
     if (!userId) {
       return httpResponse(req, res, 400, 'User ID is required');
@@ -156,7 +156,11 @@ const handleStripePayment = async (req: AuthRequest, res: Response, next: NextFu
       return httpResponse(req, res, 400, 'Items are required');
     }
 
-    const orderPreview = await orderService.getOrderPreview(items, userId as string);
+    if (!successUrl || !cancelUrl) {
+      return httpResponse(req, res, 400, 'Success and cancel URLs are required');
+    }
+
+    const orderPreview = await orderService.getOrderPreview(items, userId);
 
     if (!orderPreview || !orderPreview.lineItems || orderPreview.lineItems.length === 0) {
       return httpResponse(req, res, 400, 'Invalid order preview');
@@ -175,14 +179,13 @@ const handleStripePayment = async (req: AuthRequest, res: Response, next: NextFu
         notes: notes || '',
         items: JSON.stringify(items),
       },
-      success_url: `${process.env.FRONTEND_URL}/checkout-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL}/checkout?canceled=true`
+      success_url: successUrl, // Use frontend-provided successUrl
+      cancel_url: cancelUrl,   // Use frontend-provided cancelUrl
     });
 
     return res.status(200).json({ url: session.url, session_id: session.id });
-
   } catch (error) {
-    logger.error('Stripe session error', error); // Log the error message for more context
+    logger.error('Stripe session error', error);
     return httpError(next, error, req);
   }
 };
