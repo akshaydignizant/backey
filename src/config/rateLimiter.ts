@@ -46,7 +46,7 @@ export const initRateLimiter = async () => {
   })
 
   // Optional warm-up
-  await rateLimiterPostgres.block('init', 1, DURATION as Number)
+  await rateLimiterPostgres.block('init', 1, DURATION as number)
 }
 
 export { rateLimiterPostgres }
