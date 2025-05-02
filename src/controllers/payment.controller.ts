@@ -141,8 +141,6 @@ export const paymentSuccess = async (req: Request, res: Response, next: NextFunc
       });
       return;
     }
-
-    return res.redirect(`${process.env.FRONTEND_URL}/order-confirmation?order_id=${orderId}`);
   } catch (error) {
     logger.error('Payment success handler error', error);
     return next(error);
@@ -159,9 +157,8 @@ export const paymentCancelled = async (req: Request, res: Response): Promise<voi
     });
     return;
   }
-  res.redirect(`${process.env.FRONTEND_URL}/checkout-cancelled`);
-  return;
-  res.redirect(`${process.env.FRONTEND_URL}/checkout-cancelled`);
+  // res.redirect(`${process.env.FRONTEND_URL}/checkout-cancelled`);
+  // return;
 };
 
 // controllers/order.controller.ts
