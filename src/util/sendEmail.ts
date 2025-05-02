@@ -1,4 +1,4 @@
-import nodemailer from "nodemailer";
+import nodemailer from 'nodemailer';
 
 /**
  * Function to send an email with HTML support.
@@ -9,7 +9,7 @@ import nodemailer from "nodemailer";
 const sendEmail = async (to: string, subject: string, html: string) => {
     try {
         const transporter = nodemailer.createTransport({
-            service: "Gmail", // You can use "SendGrid", "Mailgun", etc.
+            service: 'Gmail', // You can use "SendGrid", "Mailgun", etc.
             auth: {
                 user: process.env.EMAIL_USER,
                 pass: process.env.EMAIL_PASS,
@@ -27,8 +27,8 @@ const sendEmail = async (to: string, subject: string, html: string) => {
         console.log(`Email sent to ${to}: ${info.messageId}`);
         return info;
     } catch (error) {
-        console.error("Error sending email:", error);
-        throw new Error("Failed to send email");
+        console.error('Error sending email:', error);
+        throw new Error('Failed to send email');
     }
 };
 

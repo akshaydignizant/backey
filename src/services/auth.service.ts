@@ -589,7 +589,7 @@ export const authService = {
       await prisma.userRole.createMany({
         data: roles.map((role) => ({
           userId: newUser.id,
-          workspaceId: newWorkspaceId!,
+          workspaceId: newWorkspaceId,
           role,
         })),
       });

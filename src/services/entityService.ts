@@ -1,4 +1,4 @@
-import prisma from "../util/prisma";
+import prisma from '../util/prisma';
 
 // Function to fetch any entity by its unique ID
 type PrismaModels = {

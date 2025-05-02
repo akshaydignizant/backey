@@ -27,7 +27,7 @@ import httpResponse from '../util/httpResponse'; // your utility to send respons
 const roleRestriction = (allowedRoles: Role[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction): void => {
     const user = req.user;
-    console.log("User roles:", user?.roles); // Debugging line
+    console.log('User roles:', user?.roles); // Debugging line
 
     if (!user || !user.roles || user.roles.length === 0) {
       return httpResponse(req, res, 403, 'Access Denied: No roles assigned');

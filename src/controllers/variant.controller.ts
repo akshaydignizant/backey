@@ -42,7 +42,7 @@ const variantController = {
       // Generate SKUs using your generateSlug
       const variantsWithSKUs = await Promise.all(
         variants.map(async (variant: any) => {
-          let baseSku = generateSlug(variant.title || 'variant');
+          const baseSku = generateSlug(variant.title || 'variant');
           let uniqueSku = `${baseSku}-${nanoid(6)}`;
 
           // Ensure uniqueness

@@ -1,54 +1,90 @@
 /* eslint-disable no-console */
-const { exec } = require('child_process')
+const { execSync } = require('child_process');
+const { PrismaClient } = require('@prisma/client');
 
-// Command Line Arguments
-const command = process.argv[2]
-const migrationName = process.argv[3]
+const args = process.argv.slice(2);
+const command = args[0];
+const migrationName = args[1];
 
-// Valid Migration Commands
-const validCommands = ['create', 'up', 'down', 'list', 'prune']
-if (!validCommands.includes(command)) {
-    console.error(`Invalid command: Command must be one of ${validCommands}`)
-    process.exit(0)
-}
+const validCommands = ['create', 'deploy', 'reset', 'status', 'resolve'];
 
-const commandsWithoutMigrationNameRequired = ['list', 'prune']
-if (!commandsWithoutMigrationNameRequired.includes(command)) {
-    if (!migrationName) {
-        console.error('Migration name is required')
-        process.exit(0)
+async function main() {
+    if (!command) {
+        console.error(`❌ No command provided. Must be one of: ${validCommands.join(', ')}`);
+        process.exit(1);
+    }
+
+    if (!validCommands.includes(command)) {
+        console.error(`❌ Invalid command: "${command}". Must be one of: ${validCommands.join(', ')}`);
+        process.exit(1);
+    }
+
+    const commandsWithoutMigrationName = ['deploy', 'reset', 'status'];
+    if (!commandsWithoutMigrationName.includes(command) && !migrationName) {
+        console.error(`❌ Migration name is required for '${command}' command.`);
+        process.exit(1);
+    }
+
+    const prisma = new PrismaClient();
+
+    try {
+        let execCommand = 'npx prisma migrate';
+
+        switch (command) {
+            case 'create':
+                execCommand += ` dev --name ${migrationName} --create-only`;
+                if (process.env.MIGRATE_MODE === 'development') {
+                    execCommand += ' --skip-seed';
+                }
+                break;
+            case 'deploy':
+            case 'reset':
+            case 'status':
+                execCommand += ` ${command}`;
+                if (command === 'reset') {
+                    execCommand += ' --force';
+                }
+                break;
+            case 'resolve':
+                execCommand += ` ${command} --applied ${migrationName}`;
+                break;
+        }
+
+        // Optional schema path for production
+        if (process.env.MIGRATE_MODE === 'production') {
+            execCommand += ' --schema=./prisma/schema.prisma';
+        }
+
+        console.log(`📦 Running: ${execCommand}`);
+        execSync(execCommand, { stdio: 'inherit' });
+
+        if (command === 'deploy' && process.env.MIGRATE_MODE === 'production') {
+            await verifyMigrations(prisma);
+        }
+
+        console.log('✅ Migration completed successfully');
+    } catch (error) {
+        console.error('❌ Migration failed:', error.message);
+        process.exit(1);
+    } finally {
+        await prisma.$disconnect();
     }
 }
 
-function runNpmScript() {
-    return new Promise((resolve, reject) => {
-        let execCommand = ``
-
-        if (commandsWithoutMigrationNameRequired.includes(command)) {
-            execCommand = `migrate ${command}`
-        } else {
-            execCommand = `migrate ${command} ${migrationName}`
-        }
-
-        const childProcess = exec(execCommand, (error, stdout) => {
-            if (error) {
-                reject(`Error running script: ${error}`)
-            } else {
-                resolve(stdout)
-            }
-        })
-
-        childProcess.stderr.on('data', (data) => {
-            console.error(data)
-        })
-    })
+async function verifyMigrations(prisma) {
+    try {
+        const migrations = await prisma.$queryRaw`
+      SELECT "migration_name" 
+      FROM "_prisma_migrations" 
+      WHERE "rolled_back_at" IS NULL 
+      ORDER BY "finished_at" DESC
+      LIMIT 1
+    `;
+        console.log('📋 Latest applied migration:', migrations);
+    } catch (error) {
+        console.error('❌ Error verifying migrations:', error);
+        throw error;
+    }
 }
 
-// Example usage:
-runNpmScript()
-    .then((output) => {
-        console.info(output)
-    })
-    .catch((error) => {
-        console.error('Error:', error)
-    })
+main();
