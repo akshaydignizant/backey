@@ -44,6 +44,8 @@ import { getOrderPreview } from '../services/order.service';
 import logger from '../util/logger';
 import prisma from '../util/prisma';
 import { OrderStatus } from '@prisma/client';
+import httpResponse from '../util/httpResponse';
+import httpError from '../util/httpError';
 
 export const createCheckoutSession = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -64,14 +66,34 @@ export const createCheckoutSession = async (req: Request, res: Response, next: N
         billingAddress: JSON.stringify(billingAddress || {})
       },
       shipping_address_collection: { allowed_countries: ['US', 'BR'] },
-      success_url: 'http://localhost:3000/api/v1/orders/payment-success?session_id={CHECKOUT_SESSION_ID}',
-      cancel_url: 'http://localhost:3000/api/v1/orders/payment-cancelled'
+      success_url: 'http://localhost:3000/order-confirmation/payment-success?session_id={CHECKOUT_SESSION_ID}',
+      cancel_url: 'http://localhost:3000/payment-cancelled'
     });
 
     res.status(200).json({ url: session.url });
   } catch (error) {
     logger.error('Stripe checkout session error', error);
     next(error);
+  }
+};
+
+export const stripeconfirmation = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { session_id } = req.query;
+
+    if (!session_id) {
+      return httpResponse(req, res, 400, "Session ID is required");
+    }
+
+    const session = await stripe.checkout.sessions.retrieve(session_id as string);
+    if (session.payment_status === "paid") {
+      return httpResponse(req, res, 200, "Payment successful", session);
+    } else {
+      return httpResponse(req, res, 200, "Payment not successful", session);
+    }
+  } catch (error) {
+    logger.error("Verify Stripe session error", error);
+    return httpError(next, error, req);
   }
 };
 

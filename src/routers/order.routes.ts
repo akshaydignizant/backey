@@ -27,7 +27,7 @@ import {
   getOrdersAddress,
   cancelOrderController,
 } from '../controllers/order.controller';
-import { createCheckoutSession, orderConfirmation, paymentCancelled, paymentSuccess } from '../controllers/payment.controller';
+import { createCheckoutSession, orderConfirmation, paymentCancelled, paymentSuccess, stripeconfirmation } from '../controllers/payment.controller';
 import { handleStripeWebhook } from '../controllers/webhookController';
 import express from 'express';
 import roleRestriction from '../middleware/roleRestriction';
@@ -47,6 +47,8 @@ router.post('/checkout', createCheckoutSession); // Initiates Stripe Checkout
 router.get('/payment-success', paymentSuccess);
 router.get('/payment-cancelled', paymentCancelled);
 router.get('/order-confirmation', orderConfirmation);
+router.get('/stripe/verify-stripe-session', stripeconfirmation);
+
 
 router.post('/webhook', express.raw({ type: 'application/json' }), handleStripeWebhook); // Stripe Webhook
 router.get('/workspaces/:workspaceId/orders', authMiddleware, getOrders);
