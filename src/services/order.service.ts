@@ -434,7 +434,19 @@ export const createOrder = async (
     });
 
     // Generate PDF from HTML template
-    const pdfBuffer = await generatePdfFromHtml(emailTemplate);
+    const pdfBuffer = await generatePDF({
+      orderId: order.id,
+      userEmail: user.email,
+      totalAmount: order.totalAmount,
+      status: order.status,
+      shippingAddress: formatAddress(order.shippingAddress),
+      billingAddress: formatAddress(order.billingAddress),
+      items: order.items.map(item => ({
+        variant: `${item.variant.product.name} (${item.variant.title})`,
+        quantity: item.quantity,
+        price: item.price,
+      })),
+    });
     const orderTemplate = `
   <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
     <h2>🧾 New Order Received</h2>

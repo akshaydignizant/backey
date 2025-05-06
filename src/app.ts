@@ -47,7 +47,8 @@ app.use(
   cors({
     origin: [
       'http://localhost:3000',
-      'https://48c9-2402-a00-162-ea17-b1cc-fa3f-8210-4bcb.ngrok-free.app', // adjust for development or production
+      'http://localhost:3001',
+      'https://4db2-2402-a00-162-ea17-5075-fc6a-c45c-490a.ngrok-free.app', // adjust for development or production
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD'],
     credentials: true,
