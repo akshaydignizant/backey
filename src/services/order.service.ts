@@ -9,6 +9,9 @@ import { buildOrderNotificationEmail } from '../util/notifyAdminsAndManagers';
 import { log } from 'console';
 import Stripe from 'stripe';
 import { revertStock } from '../helper/revertStock';
+import { generateOrderConfirmationEmail } from '../emailTemplate/order';
+import { generatePdfFromHtml } from '../util/pdfGeneratorOrder';
+import { calculateTotalAmount } from '../util/billing';
 
 const prisma = new PrismaClient();
 // export const createOrder = async (
@@ -328,11 +331,10 @@ export const createOrder = async (
       }
     }
     if (stockErrors.length) throw new Error(stockErrors.join(", "));
-
-    const totalAmount = data.items.reduce((sum, item) => {
-      const variant = variantMap.get(item.variantId)!;
-      return sum + item.quantity * variant.price;
-    }, 0);
+    const totalAmount = calculateTotalAmount(
+      data.items,
+      data.items.map(item => variantMap.get(item.variantId)!)
+    );
 
     const order = await prisma.$transaction(async (tx) => {
       const newOrder = await tx.order.create({
@@ -408,119 +410,82 @@ export const createOrder = async (
       select: { id: true, email: true, firstName: true, lastName: true },
     });
 
-    // Format address
     const formatAddress = (address: { address: string; street?: string | null; city: string; region: string; postalCode: string; country: string }) =>
       `${address.address}${address.street ? `, ${address.street}` : ''}, ${address.city}, ${address.region}, ${address.postalCode}, ${address.country}`;
 
     // Generate HTML email content
-    const itemsList = order.items
-      .map(item => ({
-        name: `${item.variant.product.name} (${item.variant.title})`,
-        quantity: item.quantity,
-        price: item.price,
-        total: (item.quantity * item.price).toFixed(2),
-      }));
+    const itemsList = order.items.map(item => ({
+      name: `${item.variant.product.name} (${item.variant.title})`,
+      quantity: item.quantity,
+      price: item.price,
+      total: (item.quantity * item.price).toFixed(2),
+    }));
 
-    const emailTemplate = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>New Order Confirmation</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100 font-sans">
-  <div class="max-w-2xl mx-auto bg-white p-8 mt-10 rounded-lg shadow-md">
-    <div class="text-center">
-      <h1 class="text-2xl font-bold text-gray-800">New Order Confirmation</h1>
-      <p class="text-gray-600 mt-2">Order ID: ${order.id}</p>
-    </div>
-    <div class="mt-6">
-      <h2 class="text-lg font-semibold text-gray-700">Order Details</h2>
-      <div class="mt-4 space-y-2">
-        <p><strong>Placed by:</strong> ${user.firstName} ${user.lastName || ''}</p>
-        <p><strong>Workspace:</strong> ${workspace.name}</p>
-        <p><strong>Total Amount:</strong> $${order.totalAmount.toFixed(2)}</p>
-        <p><strong>Payment Method:</strong> ${order.paymentMethod}</p>
-        <p><strong>Status:</strong> ${order.status}</p>
-        <p><strong>Notes:</strong> ${order.notes || 'None'}</p>
-      </div>
-    </div>
-    <div class="mt-6">
-      <h2 class="text-lg font-semibold text-gray-700">Items</h2>
-      <table class="w-full mt-4 border-collapse">
-        <thead>
-          <tr class="bg-gray-200">
-            <th class="p-2 text-left">Item</th>
-            <th class="p-2 text-right">Quantity</th>
-            <th class="p-2 text-right">Price</th>
-            <th class="p-2 text-right">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${itemsList
-        .map(
-          item => `
-                <tr class="border-b">
-                  <td class="p-2">${item.name}</td>
-                  <td class="p-2 text-right">${item.quantity}</td>
-                  <td class="p-2 text-right">$${item.price.toFixed(2)}</td>
-                  <td class="p-2 text-right">$${item.total}</td>
-                </tr>
-              `
-        )
-        .join('')}
-        </tbody>
-      </table>
-    </div>
-    <div class="mt-6">
-      <h2 class="text-lg font-semibold text-gray-700">Shipping Address</h2>
-      <p class="mt-2 text-gray-600">${formatAddress(order.shippingAddress)}</p>
-    </div>
-    <div class="mt-6">
-      <h2 class="text-lg font-semibold text-gray-700">Billing Address</h2>
-      <p class="mt-2 text-gray-600">${formatAddress(order.billingAddress)}</p>
-    </div>
-    <div class="mt-6 text-center">
-      <a
-        href="https://your-dashboard-url.com/orders/${order.id}"
-        class="inline-block bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700"
-      >
-        View Order in Dashboard
-      </a>
-    </div>
-    <div class="mt-8 text-center text-gray-500 text-sm">
-      <p>Thank you for choosing us!</p>
-      <p>&copy; ${new Date().getFullYear()} Your Company Name. All rights reserved.</p>
-    </div>
+    // Generate the base email HTML
+    const emailTemplate = generateOrderConfirmationEmail({
+      order,
+      user: {
+        ...user,
+        lastName: user.lastName ?? undefined,
+      },
+      workspace,
+      itemsList,
+      formatAddress,
+    });
+
+    // Generate PDF from HTML template
+    const pdfBuffer = await generatePdfFromHtml(emailTemplate);
+    const orderTemplate = `
+  <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <h2>🧾 New Order Received</h2>
+    <p>Hello,</p>
+    <p>A new order has been placed in <strong>${workspace.name}</strong>.</p>
+
+    <h3>Order Details</h3>
+    <ul>
+      <li><strong>Order ID:</strong> ${order.id}</li>
+      <li><strong>Customer Name:</strong> ${user.firstName} ${user.lastName}</li>
+      <li><strong>Total:</strong> $${order.totalAmount.toFixed(2)}</li>
+      <li><strong>Date:</strong> ${new Date(order.createdAt).toLocaleString()}</li>
+    </ul>
+
+    <p>The full order summary is attached as a PDF.</p>
+
+    <p>Thank you,<br/>${workspace.name} Team</p>
   </div>
-</body>
-</html>
 `;
 
-    // Send emails concurrently
+    // Send emails concurrently to internal recipients
     const emailPromises = recipients
       .filter(r => r.email)
       .map(r =>
-        sendEmail(
-          r.email,
-          `🧾 New Order: ${workspace.name} (Order ID: ${order.id})`,
-          emailTemplate,
-        ).catch(err => {
+        sendEmail({
+          to: r.email,
+          subject: `🧾 New Order: ${workspace.name} (Order ID: ${order.id})`,
+          html: orderTemplate,
+          pdfBuffer,
+          attachmentName: `Order-${order.id}.pdf`,
+        }).catch(err => {
           console.error(`Failed to send email to ${r.email}:`, err);
           return null;
         })
       );
 
-    // Send customer email
+    // Send email to customer with a personalized heading
     if (user.email) {
+      const customerTemplate = emailTemplate.replace(
+        'New Order Confirmation',
+        `Thank You for Your Order, ${user.firstName}!`
+      );
+
       emailPromises.push(
-        sendEmail(
-          user.email,
-          `🧾 Your Order Receipt: ${workspace.name} (Order ID: ${order.id})`,
-          emailTemplate.replace('New Order Confirmation', `Thank You for Your Order, ${user.firstName}!`)
-        ).catch(err => {
+        sendEmail({
+          to: user.email,
+          subject: `🧾 Your Order Receipt: ${workspace.name} (Order ID: ${order.id})`,
+          html: customerTemplate,
+          pdfBuffer,
+          attachmentName: `Order-${order.id}.pdf`,
+        }).catch(err => {
           console.error(`Failed to send email to customer ${user.email}:`, err);
           return null;
         })
@@ -528,7 +493,6 @@ export const createOrder = async (
     } else {
       console.warn(`No email sent to customer: user.email is missing for user ${user.id}`);
     }
-
     await Promise.all(emailPromises);
 
     return {
@@ -585,11 +549,7 @@ export const cancelOrder = async (
         createdAt: new Date(),
       },
     });
-
-    if (order.status !== 'PENDING' && order.paymentMethod !== 'CASH') {
-      await revertStock(order.items, tx); // Make sure revertStock is optimized
-    }
-
+    await revertStock(order.items, tx);
     await tx.notification.create({
       data: {
         userId: authUserId,
@@ -608,11 +568,11 @@ export const cancelOrder = async (
   });
 
   // Send email OUTSIDE transaction
-  sendEmail(
-    result.userEmail,
-    'Order Cancelled',
-    `<p>Your order #${orderId} has been cancelled.</p><p>For any queries, please contact support.</p>`
-  ).catch((err) => {
+  sendEmail({
+    to: result.userEmail,
+    subject: 'Order Cancelled',
+    html: `<p>Your order #${orderId} has been cancelled.</p><p>For any queries, please contact support.</p>`,
+  }).catch((err) => {
     console.error(`Failed to send cancellation email for order ${orderId}:`, err);
   });
 
@@ -1179,7 +1139,11 @@ export const notifyOrderStatus = async (
     `;
 
     // Send the email
-    await sendEmail(userEmail, emailSubject, emailBody);
+    await sendEmail({
+      to: userEmail,
+      subject: emailSubject,
+      html: emailBody,
+    });
 
     logger.info(`Notification sent for order ${orderId} to ${userEmail}`);
   } catch (error) {

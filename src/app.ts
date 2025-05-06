@@ -23,6 +23,9 @@ import inventoryRoutes from './routers/inventory.routes';
 import notificationRoutes from './routers/notification.routes';
 import billRoutes from './routers/billing.route';
 import cartRoutes from './routers/cart.routes';
+import { getBaseUrl } from './util/baseUrl';
+// Initialize low stock alert cron job
+import './automaticAlert/node-cron'; // Ensures the low stock alert cron job is scheduled on server start
 
 // Load environment variables
 dotenv.config();
@@ -60,6 +63,13 @@ app.use(express.static(path.join(__dirname, '../', 'public')));
 app.get('/', (_req, res) => {
   res.send('🚀 Backend is running!');
 });
+
+// Express route
+app.get('/api/v1/meta/base-url', (_req, res) => {
+  const baseUrl = getBaseUrl();
+  res.json({ baseUrl });
+});
+
 
 // API Routes
 app.use('/api/v1/auth', authRoutes);

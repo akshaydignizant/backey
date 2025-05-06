@@ -13,7 +13,7 @@ import {
 
 const router = Router();
 
-// Existing Routes
+
 router.post('/:workspaceId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), createCategory);
 router.get('/:workspaceId', authMiddleware, getCategoriesInWorkspace);
 router.put('/:workspaceId/:categoryId', authMiddleware, roleRestriction([Role.ADMIN, Role.MANAGER]), updateCategory);

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 import { IProductVariant, IStockFilter, IStockUpdate } from '../types/products/stock.interface';
 import sendEmail from '../util/sendEmail';
+import { generateLowStockEmailHtml } from '../emailTemplate/lowStockEmail';
 
 // Initialize Prisma Client
 const prisma = new PrismaClient({ log: ['error'] });
@@ -221,46 +222,7 @@ export const inventoryService = {
             }),
         ]);
 
-        // Prepare the email body
-        const itemsList = variants.map(item => {
-            return `
-            <tr>
-                <td>${item.product.name}</td>
-                <td>${item.title}</td>
-                <td>${item.sku}</td>
-                <td>${item.stock}</td>
-                <td>${item.price}</td>
-                <td>${item.size || 'N/A'}</td>
-            </tr>
-        `;
-        }).join('');
-
-        const emailHtml = `
-        <html>
-        <body>
-            <h2>Low Stock Alert</h2>
-            <p><strong>Workspace:</strong> ${workspaceId}</p>
-            <p><strong>Total Items with Low Stock:</strong> ${totalLowStock}</p>
-            <table border="1">
-                <thead>
-                    <tr>
-                        <th>Product</th>
-                        <th>Variant</th>
-                        <th>SKU</th>
-                        <th>Stock</th>
-                        <th>Price</th>
-                        <th>Size</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${itemsList}
-                </tbody>
-            </table>
-        </body>
-        </html>
-    `;
-
-        // Fetch recipients (you could customize this to notify specific people, like admins or managers)
+        // Fetch recipients (customize this as needed)
         const recipients = await prisma.user.findMany({
             where: {
                 UserRole: { some: { workspaceId, role: { in: ['ADMIN', 'MANAGER'] } } },
@@ -268,12 +230,18 @@ export const inventoryService = {
             select: { email: true },
         });
 
-        // Send email to each recipient
+        // Generate the email HTML
+        const emailHtml = generateLowStockEmailHtml(workspaceId, totalLowStock, variants);
+
+        // Send email to each recipient concurrently
         const emailPromises = recipients.map(r =>
-            sendEmail(r.email, `⚠️ Low Stock Alert for Workspace ${workspaceId}`, emailHtml)
+            sendEmail({
+                to: r.email,
+                subject: `⚠️ Low Stock Alert for Workspace ${workspaceId}`,
+                html: emailHtml,
+            })
                 .catch(err => console.error(`Failed to send email to ${r.email}:`, err))
         );
-
         // Wait for all emails to be sent
         await Promise.all(emailPromises);
 
@@ -284,6 +252,7 @@ export const inventoryService = {
             pagination: { limit, offset },
         };
     },
+
 
     // Create Inventory Transfer: Move stock between workspaces
     async createInventoryTransfer(workspaceId: number, userId: string, data: {

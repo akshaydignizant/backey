@@ -5,7 +5,6 @@ export function calculateTotalAmount(
   items: Array<{ quantity: number }>,
   variants: Array<{ price: number }>
 ): number {
-  // Basic implementation - sum of all items
   let total = 0;
 
   for (let i = 0; i < items.length; i++) {

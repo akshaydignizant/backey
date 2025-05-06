@@ -1,0 +1,122 @@
+stages:
+    - test
+    - build
+    - deploy
+
+variables:
+    POSTGRES_DB: backey_db
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: postgres
+    POSTGRES_HOST: postgres
+    DATABASE_URL: 'postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:5432/${POSTGRES_DB}?schema=public'
+    NODE_ENV: test
+    CI: true
+
+cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+        - node_modules/
+        - .npm
+
+# Use Docker-in-Docker service
+services:
+    - postgres:15
+
+# Install dependencies
+install_dependencies:
+    stage: test
+    image: node:20
+    script:
+        - npm ci
+        - npx prisma generate
+    artifacts:
+        paths:
+            - node_modules/
+        expire_in: 1 hour
+
+# Run linting
+lint:
+    stage: test
+    image: node:20
+    needs: ['install_dependencies']
+    script:
+        - npm run lint
+        - npm run format:check
+
+# Run tests (if you add tests later)
+# test:
+#   stage: test
+#   image: node:20
+#   needs: ["install_dependencies"]
+#   script:
+#     - npm test
+
+# Build the application
+build:
+    stage: build
+    image: node:20
+    needs: ['install_dependencies']
+    script:
+        - npm run build
+    artifacts:
+        paths:
+            - dist/
+        expire_in: 1 week
+
+# Run database migrations
+migrate:
+    stage: deploy
+    image: node:20
+    needs: ['build']
+    script:
+        - npx prisma migrate deploy
+        - npm run migrate:prod
+    only:
+        - main
+        - master
+        - production
+
+# Deploy to production (example - adjust to your deployment platform)
+deploy_production:
+    stage: deploy
+    image: node:20
+    needs: ['migrate']
+    script:
+        - echo "Deploying to production..."
+        # Add your deployment commands here
+        # For example, if using Heroku:
+        # - apt-get update -yq && apt-get install -y ruby-dev
+        # - gem install dpl
+        # - dpl --provider=heroku --app=$HEROKU_APP_NAME --api-key=$HEROKU_API_KEY
+    only:
+        - main
+        - master
+        - production
+
+# Review app for merge requests
+review_app:
+    stage: deploy
+    image: node:20
+    needs: ['build']
+    script:
+        - npm run migrate:dev
+        - npm run start
+    environment:
+        name: review/${CI_COMMIT_REF_NAME}
+        url: http://${CI_ENVIRONMENT_SLUG}.example.com
+        on_stop: stop_review_app
+    only:
+        - merge_requests
+    auto_stop_in: 1 day
+
+stop_review_app:
+    stage: deploy
+    image: node:20
+    script:
+        - echo "Stopping review app"
+    environment:
+        name: review/${CI_COMMIT_REF_NAME}
+        action: stop
+    when: manual
+    only:
+        - merge_requests

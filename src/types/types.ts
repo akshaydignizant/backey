@@ -1,4 +1,4 @@
-import { Role } from '@prisma/client';
+import { OrderStatus, PaymentStatus, Role } from '@prisma/client';
 import { Request } from 'express';
 import jwt from 'jsonwebtoken';
 export type THttpResponse = {
@@ -58,3 +58,51 @@ export interface SearchParams {
     page: number;
     limit: number;
 }
+
+export type ReportType =
+    | 'sales'
+    | 'inventory'
+    | 'customer'
+    | 'employee-performance'
+    | 'financial-summary'
+    | 'product-performance'
+    | 'order-fulfillment'
+    | 'shipping'
+    | 'low-stock'
+    | 'abandoned-carts'
+    | 'payment-methods'
+    | 'category-performance'
+    | 'user-signups';
+
+export type DateRangeFilter = {
+    startDate?: string;
+    endDate?: string;
+};
+
+export type PaginationFilter = {
+    page?: number;
+    pageSize?: number;
+    limit?: number;
+    offset?: number;
+};
+
+export type SortFilter = {
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+};
+
+export type ReportFilters = DateRangeFilter & PaginationFilter & SortFilter & {
+    status?: OrderStatus | OrderStatus[];
+    paymentStatus?: PaymentStatus | PaymentStatus[];
+    threshold?: number;
+    hours?: number;
+    categoryId?: string;
+    productId?: string;
+    userId?: string;
+    lastOrders?: number;
+};
+
+export type ReportParams = {
+    workspaceId: number;
+    filters: ReportFilters;
+};
