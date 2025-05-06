@@ -585,9 +585,6 @@ export const authController = {
       if (error.message.includes('Access denied')) {
         return httpError(next, new Error('Access denied'), req, 403);
       }
-      if (error.message.includes('used in existing orders')) {
-        return httpError(next, new Error('Address is used in orders'), req, 400);
-      }
       return httpError(next, new Error('Internal server error'), req, 500);
     }
   },

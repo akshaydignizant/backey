@@ -267,6 +267,7 @@ model Address {
   postalCode     String
   country        String
   isDefault      Boolean  @default(false)
+  isDeleted      Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   user           User     @relation(fields: [userId], references: [id])

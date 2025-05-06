@@ -884,7 +884,10 @@ export const authService = {
               country: true,
             },
           },
-          Address: { // Fetch all addresses associated with the user
+          Address: {
+            where: {
+              isDeleted: false,
+            },
             select: {
               id: true,
               address: true,
@@ -912,43 +915,29 @@ export const authService = {
       throw new Error('Invalid userId or addressId');
     }
 
-    // Check if address exists and belongs to the user
-    const address = await prisma.address.findFirst({
-      where: {
-        id: addressId,
-        userId: userId,
-      },
+    // Fetch the specific address
+    const address = await prisma.address.findUnique({
+      where: { id: addressId },
     });
 
     if (!address) {
-      const addressExists = await prisma.address.findUnique({
-        where: { id: addressId },
-      });
-      if (addressExists) {
-        throw new Error('Access denied: You do not own this address');
-      }
       throw new Error('Address not found');
     }
 
-    // Check if the address is used in any orders (billing or shipping)
-    const ordersUsingAddress = await prisma.order.findFirst({
-      where: {
-        OR: [
-          { billingAddressId: addressId },
-          { shippingAddressId: addressId },
-        ],
-      },
-    });
-
-    if (ordersUsingAddress) {
-      throw new Error('Cannot delete address: It is used in existing orders');
+    if (address.userId !== userId) {
+      throw new Error('Access denied: You do not own this address');
     }
 
-    // Perform deletion within a transaction
-    await prisma.$transaction(async (tx) => {
-      await tx.address.delete({
-        where: { id: addressId },
-      });
+    if (address.isDeleted) {
+      return {
+        success: true,
+        message: 'Address already deleted',
+      };
+    }
+    // Soft delete the address
+    await prisma.address.update({
+      where: { id: addressId },
+      data: { isDeleted: true },
     });
 
     return {
