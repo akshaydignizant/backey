@@ -557,17 +557,38 @@ export const authController = {
     try {
       const userId = req.user?.userId;
       const addressId = req.params.addressId;
-      console.log('userId:', userId, 'addressId:', addressId);
-      if (!userId || !addressId) {
-        return httpError(next, new Error('Invalid input: addressId is required'), req, 400);
+
+      // Validate user authentication
+      if (!userId) {
+        return httpError(next, new Error('Unauthorized'), req, 401);
       }
 
+      // Validate addressId
+      if (!addressId) {
+        return httpError(next, new Error('Address ID is required'), req, 400);
+      }
+
+      console.log('userId:', userId, 'addressId:', addressId); // Retain logging for debugging
+
+      // Call service to delete address
       const result = await authService.deleteAddress(userId, addressId);
 
+      // Return success response
       res.status(200).json(result);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Delete address error:', error);
-      res.status(500).json({ success: false, message: 'Internal server error' });
+
+      // Specific error handling
+      if (error.message.includes('not found')) {
+        return httpError(next, new Error('Address not found'), req, 404);
+      }
+      if (error.message.includes('Access denied')) {
+        return httpError(next, new Error('Access denied'), req, 403);
+      }
+      if (error.message.includes('used in existing orders')) {
+        return httpError(next, new Error('Address is used in orders'), req, 400);
+      }
+      return httpError(next, new Error('Internal server error'), req, 500);
     }
   },
   updateAddress: async (req: Request, res: Response, next: NextFunction): Promise<void> => {

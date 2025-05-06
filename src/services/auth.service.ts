@@ -908,16 +908,47 @@ export const authService = {
     }
   },
   deleteAddress: async (userId: string, addressId: string) => {
-    const address = await prisma.address.findUnique({
-      where: { id: addressId },
-    });
-
-    if (!address || address.userId !== userId) {
-      throw new Error('Address not found or access denied');
+    if (!userId || !addressId) {
+      throw new Error('Invalid userId or addressId');
     }
 
-    await prisma.address.delete({
-      where: { id: addressId },
+    // Check if address exists and belongs to the user
+    const address = await prisma.address.findFirst({
+      where: {
+        id: addressId,
+        userId: userId,
+      },
+    });
+
+    if (!address) {
+      const addressExists = await prisma.address.findUnique({
+        where: { id: addressId },
+      });
+      if (addressExists) {
+        throw new Error('Access denied: You do not own this address');
+      }
+      throw new Error('Address not found');
+    }
+
+    // Check if the address is used in any orders (billing or shipping)
+    const ordersUsingAddress = await prisma.order.findFirst({
+      where: {
+        OR: [
+          { billingAddressId: addressId },
+          { shippingAddressId: addressId },
+        ],
+      },
+    });
+
+    if (ordersUsingAddress) {
+      throw new Error('Cannot delete address: It is used in existing orders');
+    }
+
+    // Perform deletion within a transaction
+    await prisma.$transaction(async (tx) => {
+      await tx.address.delete({
+        where: { id: addressId },
+      });
     });
 
     return {
