@@ -53,14 +53,34 @@ export const productService = {
         },
       });
 
-      // Create variants
+      // Handle variants with SKU check
       if (variants.length > 0) {
-        await prisma.productVariant.createMany({
-          data: variants.map((variant) => ({
-            ...variant,
-            productId: createdProduct.id,
-          })),
+        const skusToCheck = variants.map((v) => v.sku);
+        const existingSKUs = await prisma.productVariant.findMany({
+          where: { sku: { in: skusToCheck } },
+          select: { sku: true },
         });
+
+        const existingSKUSet = new Set(existingSKUs.map((v) => v.sku));
+
+        const newVariants = variants
+          .filter((v) => !existingSKUSet.has(v.sku))
+          .map((v) => ({ ...v, productId: createdProduct.id }));
+
+        if (newVariants.length < variants.length) {
+          const skippedSKUs = variants
+            .filter((v) => existingSKUSet.has(v.sku))
+            .map((v) => v.sku);
+
+          logger.warn('Duplicate SKUs skipped:', { skippedSKUs });
+        }
+
+        if (newVariants.length > 0) {
+          await prisma.productVariant.createMany({
+            data: newVariants,
+            skipDuplicates: true, // Extra safety
+          });
+        }
       }
 
       // Return product with variants
