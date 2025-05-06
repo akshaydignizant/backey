@@ -622,6 +622,7 @@ export const getOrdersAddress = async (
           region: true,
           postalCode: true,
           country: true,
+          isDeleted: true, // 👈 Include soft-delete status
         },
       },
       billingAddress: {
@@ -633,6 +634,7 @@ export const getOrdersAddress = async (
           region: true,
           postalCode: true,
           country: true,
+          isDeleted: true, // 👈 Include soft-delete status
         },
       },
     },
@@ -641,13 +643,23 @@ export const getOrdersAddress = async (
   const uniqueAddresses = new Map<string, any>();
 
   for (const { shippingAddress, billingAddress } of orders) {
-    if (shippingAddress && !uniqueAddresses.has(shippingAddress.id)) {
+    if (
+      shippingAddress &&
+      !shippingAddress.isDeleted &&
+      !uniqueAddresses.has(shippingAddress.id)
+    ) {
       uniqueAddresses.set(shippingAddress.id, shippingAddress);
     }
-    if (billingAddress && !uniqueAddresses.has(billingAddress.id)) {
+
+    if (
+      billingAddress &&
+      !billingAddress.isDeleted &&
+      !uniqueAddresses.has(billingAddress.id)
+    ) {
       uniqueAddresses.set(billingAddress.id, billingAddress);
     }
   }
+
 
   return Array.from(uniqueAddresses.values());
 };
