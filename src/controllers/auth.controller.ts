@@ -417,18 +417,18 @@ export const authController = {
     try {
       const { email, password } = req.body as SigninRequest;
       const data = await authService.signInService(email, password);
-      const encryptedResponse = CryptoHelper.encrypt({
-        message: 'Login successful',
-        data,
-      });
+      // const encryptedResponse = CryptoHelper.encrypt({
+      //   message: 'Login successful',
+      //   data,
+      // });
 
-      res.status(200).json({
-        success: true,
-        statusCode: 200,
-        encryptedData: encryptedResponse.encryptedData,
-        iv: encryptedResponse.iv,
-      });
-      // httpResponse(req, res, 200, 'Login successful', data);
+      // res.status(200).json({
+      //   success: true,
+      //   statusCode: 200,
+      //   encryptedData: encryptedResponse.encryptedData,
+      //   iv: encryptedResponse.iv,
+      // });
+      httpResponse(req, res, 200, 'Login successful', data);
     } catch (err) {
       httpError(next, err, req);
     }
@@ -555,9 +555,9 @@ export const authController = {
   },
   deleteAddress: async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
       const addressId = req.params.addressId;
-
+      console.log('userId:', userId, 'addressId:', addressId);
       if (!userId || !addressId) {
         return httpError(next, new Error('Invalid input: addressId is required'), req, 400);
       }
@@ -572,7 +572,10 @@ export const authController = {
   },
   updateAddress: async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
+      if (!userId) {
+        return httpError(next, new Error('Unauthorized'), req, 401);
+      }
       const { addressId } = req.params;
       const updateData = req.body;
 
