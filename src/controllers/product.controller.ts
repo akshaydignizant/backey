@@ -5,7 +5,6 @@ import httpError from '../util/httpError';
 import httpResponse from '../util/httpResponse';
 import { ProductInput, ProductVariantInput } from '../types/product';
 import prisma from '../util/prisma';
-import { findProductById } from '../services/entityService';
 
 export const createProduct = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { categoryId } = req.params;
