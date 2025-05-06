@@ -326,7 +326,7 @@ import redisClient, { RedisTTL } from '../cache/redisClient';
 import { generateToken } from '../util/generateToken';
 import sendEmail from '../util/sendEmail';
 import crypto from 'crypto';
-import { Location, Role, User, UserStatus } from '@prisma/client';
+import { Address, Location, Role, User, UserStatus } from '@prisma/client';
 import { generatePasswordResetEmail } from '../emailTemplate/passwordResetOtp';
 
 export const authService = {
@@ -906,5 +906,39 @@ export const authService = {
       console.error(error);
       throw new Error(`Failed to fetch user details: ${error}`);
     }
+  },
+  deleteAddress: async (userId: string, addressId: string) => {
+    const address = await prisma.address.findUnique({
+      where: { id: addressId },
+    });
+
+    if (!address || address.userId !== userId) {
+      throw new Error('Address not found or access denied');
+    }
+
+    await prisma.address.delete({
+      where: { id: addressId },
+    });
+
+    return {
+      success: true,
+      message: 'Address deleted successfully',
+    };
+  },
+  updateAddress: async (userId: string, addressId: string, updateData: Partial<Address>) => {
+    const existingAddress = await prisma.address.findUnique({
+      where: { id: addressId },
+    });
+
+    if (!existingAddress || existingAddress.userId !== userId) {
+      throw new Error('Address not found or access denied');
+    }
+
+    const updated = await prisma.address.update({
+      where: { id: addressId },
+      data: updateData,
+    });
+
+    return updated;
   }
 };

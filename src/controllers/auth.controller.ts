@@ -553,4 +553,39 @@ export const authController = {
       httpError(next, error, req, 500);
     }
   },
+  deleteAddress: async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user?.id;
+      const addressId = req.params.addressId;
+
+      if (!userId || !addressId) {
+        return httpError(next, new Error('Invalid input: addressId is required'), req, 400);
+      }
+
+      const result = await authService.deleteAddress(userId, addressId);
+
+      res.status(200).json(result);
+    } catch (error) {
+      console.error('Delete address error:', error);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  },
+  updateAddress: async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user?.id;
+      const { addressId } = req.params;
+      const updateData = req.body;
+
+      if (!userId || !addressId) {
+        return httpError(next, new Error('Missing userId or addressId'), req, 400);
+      }
+
+      const updated = await authService.updateAddress(userId, addressId, updateData);
+      res.status(200).json({ success: true, message: 'Address updated successfully', data: updated });
+
+    } catch (error) {
+      console.error('Update address error:', error);
+      res.status(500).json({ success: false, message: error || 'Internal server error' });
+    }
+  }
 };

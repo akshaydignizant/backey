@@ -18,5 +18,7 @@ router.post('/reset-password', authController.resetPassword);
 router.put('/user/:id', authMiddleware, roleRestriction([Role.ADMIN]), authController.UpdateProfile);
 router.get('/userRoles', authMiddleware, authController.userRoles);
 router.get('/userDetails', authMiddleware, authController.getUserDetails);
+router.delete('/address/:addressId', authMiddleware, authController.deleteAddress);
+router.put('/address/:addressId', authController.updateAddress);
 
 export default router;
